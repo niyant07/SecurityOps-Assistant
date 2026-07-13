@@ -57,7 +57,7 @@ CATALOG: tuple[ToolSpec, ...] = (
     ToolSpec(
         "nmap", "Nmap", "nmap", ToolCategory.RECON,
         "Network mapper: host discovery, port scanning, service/version and OS detection.",
-        template="{binary} -sV -sC -oN {outfile} {target}",
+        template="{binary} -sV -sC {target}",
         notes="Use -Pn if hosts block ping. -T4 speeds scans on reliable networks.",
     ),
     ToolSpec(

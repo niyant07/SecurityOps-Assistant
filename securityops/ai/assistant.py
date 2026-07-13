@@ -49,13 +49,13 @@ class Assistant:
              self._recommend_next),
             (re.compile(r"\b(command|how do i run|generate|scan for|build)\b", re.I),
              self._generate_command),
-            (re.compile(r"\b(remediat|fix|mitigat|how to resolve)\b", re.I),
+            (re.compile(r"\b(remediat\w*|fix|mitigat\w*|resolve)\b", re.I),
              self._remediation),
             (re.compile(r"\b(cvss|severity|score)\b", re.I),
              self._severity_help),
             (re.compile(r"\b(workflow|phase|methodology|process|steps)\b", re.I),
              self._workflow),
-            (re.compile(r"\b(exploit|hack|attack|ddos|malware|ransom)\b", re.I),
+            (re.compile(r"\b(exploit\w*|hack\w*|attack\w*|ddos|malware|ransom\w*)\b", re.I),
              self._safety_gate),
         ]
 
