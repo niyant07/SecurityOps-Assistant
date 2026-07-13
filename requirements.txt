@@ -1,0 +1,15 @@
+# Core runtime dependencies for SecurityOps Assistant
+# Install with:  python -m pip install -r requirements.txt
+PySide6>=6.6
+PyYAML>=6.0
+Jinja2>=3.1
+Markdown>=3.5
+
+# PDF rendering (Linux/Kali). Optional: HTML reports work without it.
+weasyprint>=60 ; platform_system == "Linux"
+
+# --- Development / test extras (optional) ---
+# pytest>=8.0
+# pytest-qt>=4.4
+# mypy>=1.8
+# ruff>=0.3

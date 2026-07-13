@@ -1,0 +1,44 @@
+# SecurityOps Assistant — default configuration
+# User overrides live in ~/.config/securityops/config.yaml and take precedence.
+
+application:
+  name: "SecurityOps Assistant"
+  # Directory names are resolved under the platform data/config dirs at runtime.
+  organization: "SecurityOps"
+
+logging:
+  level: "INFO"          # DEBUG, INFO, WARNING, ERROR, CRITICAL
+  console: true
+  file: true
+  max_bytes: 5242880     # 5 MiB per log file
+  backup_count: 5
+
+database:
+  # Relative filename resolved under the data directory. Use ":memory:" for tests.
+  filename: "securityops.db"
+
+ui:
+  theme: "dark"          # "dark" or "light"
+  confirm_tool_launch: true
+  font_family: "Sans Serif"
+  font_size: 10
+
+tools:
+  # Extra directories to search for tool binaries, in addition to $PATH.
+  extra_paths:
+    - "/usr/share/kali-tools"
+  # A terminal emulator used to launch interactive/console tools.
+  # {cmd} is replaced with the full command line.
+  terminal:
+    program: "x-terminal-emulator"
+    args: ["-e", "bash", "-lc", "{cmd}; exec bash"]
+
+assistant:
+  # The offline assistant is a static knowledge base — no network access.
+  enabled: true
+
+reporting:
+  author: "Security Analyst"
+  company: "Your Organization"
+  # Default classification banner printed on reports.
+  classification: "CONFIDENTIAL"
