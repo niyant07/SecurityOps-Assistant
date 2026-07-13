@@ -57,9 +57,21 @@ registration API. This keeps the codebase modular and testable.
 
 ## Installation
 
+**Kali Linux (recommended, incl. inside a VirtualBox VM):** run the installer,
+which installs required system/Qt libraries via `apt`, creates a `.venv/`, and
+installs Python dependencies:
+
 ```bash
-cd securityops
-python -m venv .venv
+git clone https://github.com/niyant07/SecurityOps-Assistant.git
+cd SecurityOps-Assistant
+./scripts/install.sh          # installs everything
+./scripts/install.sh --run    # installs, then launches the app immediately
+```
+
+**Manual / other platforms:**
+
+```bash
+python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -r requirements.txt
 # or: python -m pip install -e ".[dev]"
