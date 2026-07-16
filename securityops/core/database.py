@@ -32,7 +32,7 @@ from .logging_config import get_logger
 
 _LOG = get_logger("database")
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS projects (
@@ -81,6 +81,7 @@ CREATE TABLE IF NOT EXISTS findings (
     cvss_score    REAL,
     cvss_vector   TEXT NOT NULL DEFAULT '',
     remediation   TEXT NOT NULL DEFAULT '',
+    reproduction  TEXT NOT NULL DEFAULT '',
     references_   TEXT NOT NULL DEFAULT '',
     created_at    TEXT NOT NULL,
     updated_at    TEXT NOT NULL
@@ -322,6 +323,7 @@ class FindingRepo(_BaseRepo):
             cvss_score=r["cvss_score"],
             cvss_vector=r["cvss_vector"],
             remediation=r["remediation"],
+            reproduction=r["reproduction"],
             references=r["references_"],
             created_at=_parse(r["created_at"]),  # type: ignore[arg-type]
             updated_at=_parse(r["updated_at"]),  # type: ignore[arg-type]
@@ -330,8 +332,9 @@ class FindingRepo(_BaseRepo):
     def create(self, finding: Finding) -> Finding:
         cur = self._db.execute(
             "INSERT INTO findings (project_id, title, severity, description, "
-            "affected_asset, cvss_score, cvss_vector, remediation, references_, "
-            "created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "affected_asset, cvss_score, cvss_vector, remediation, reproduction, "
+            "references_, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 finding.project_id,
                 finding.title,
@@ -341,6 +344,7 @@ class FindingRepo(_BaseRepo):
                 finding.cvss_score,
                 finding.cvss_vector,
                 finding.remediation,
+                finding.reproduction,
                 finding.references,
                 _iso(finding.created_at),
                 _iso(finding.updated_at),
@@ -355,8 +359,8 @@ class FindingRepo(_BaseRepo):
         finding.updated_at = datetime.now(timezone.utc)
         self._db.execute(
             "UPDATE findings SET title=?, severity=?, description=?, affected_asset=?, "
-            "cvss_score=?, cvss_vector=?, remediation=?, references_=?, updated_at=? "
-            "WHERE id=?",
+            "cvss_score=?, cvss_vector=?, remediation=?, reproduction=?, references_=?, "
+            "updated_at=? WHERE id=?",
             (
                 finding.title,
                 finding.severity.value,
@@ -365,6 +369,7 @@ class FindingRepo(_BaseRepo):
                 finding.cvss_score,
                 finding.cvss_vector,
                 finding.remediation,
+                finding.reproduction,
                 finding.references,
                 _iso(finding.updated_at),
                 finding.id,
@@ -460,8 +465,23 @@ class Database:
             self._conn.executescript(_SCHEMA)
             (version,) = self._conn.execute("PRAGMA user_version").fetchone()
             if version < SCHEMA_VERSION:
+                self._migrate(int(version))
                 self._conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
             self._conn.commit()
+
+    def _migrate(self, from_version: int) -> None:
+        """Apply incremental migrations for databases created by older versions.
+
+        ``CREATE TABLE IF NOT EXISTS`` only creates missing tables, so columns
+        added to existing tables must be applied explicitly here.
+        """
+        if from_version < 2:
+            existing = {row["name"] for row in
+                        self._conn.execute("PRAGMA table_info(findings)")}
+            if "reproduction" not in existing:
+                _LOG.info("Migrating findings table to schema v2 (add reproduction)")
+                self._conn.execute(
+                    "ALTER TABLE findings ADD COLUMN reproduction TEXT NOT NULL DEFAULT ''")
 
     # -- low-level helpers ------------------------------------------------ #
     def execute(self, sql: str, params: Iterable[Any] = ()) -> sqlite3.Cursor:

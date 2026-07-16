@@ -21,6 +21,7 @@ services**.
 | Area | Capability |
 |------|-----------|
 | **AI Workflow** | Plain-English goal → reviewable plan → approve → background run → findings → plain-English explanation |
+| **AI Bug Bounty** | Import & validate engagement scope, build a target-type methodology, run in-scope-only steps, report with reproduction steps |
 | **Projects** | Create/manage engagements, stored in a local SQLite database |
 | **Assets & Scope** | Inventory hosts/URLs, mark in-scope vs. out-of-scope |
 | **Tool Launcher** | Auto-detects installed Kali tools; builds & launches commands |
@@ -51,6 +52,25 @@ Planning and explanation use a **local LLM (Ollama)** when one is running on
 `localhost`; if none is available the app falls back to deterministic rules and
 remains fully functional offline.
 
+### AI Bug Bounty Assistant
+
+A dedicated tab for authorized bug bounty work, fully integrated with the shared
+project database, workflow engine, and reporting:
+
+1. **Import & validate scope** — paste an engagement's in-scope / out-of-scope
+   rules (hostnames, `*.wildcards`, IPs, CIDRs). Entries are saved as project
+   assets; rules are stored on the project.
+2. **Scope is a hard gate** — the planner refuses any target that is out of scope
+   or not listed; out-of-scope rules always win.
+3. **Target-type methodology** — pick Web / API / Mobile backend / Desktop /
+   Network and get a tailored recon → enumeration → assessment chain.
+4. **Approve & run** on the same background engine, with findings highlighted.
+5. **Recommend next step** — the assistant suggests the next methodology phase
+   based on what has already run and the scope.
+6. **Bug bounty report** — Executive summary, Scope, Methodology, Findings
+   (severity / CVSS / evidence), **reproduction steps**, remediation, and
+   references, exported to HTML / PDF / Markdown.
+
 ## Architecture
 
 ```
@@ -58,7 +78,8 @@ securityops/
 ├── core/          Config, logging, SQLite database, threading, plugin & tool managers
 ├── models/        Typed dataclasses for Project, Asset, Scan, Finding, Evidence
 ├── workflow/      AI workflow: plan model, NL planner, output parsers, engine, explainer
-├── plugins/       Built-in feature plugins (AI workflow, tool launcher, scans, reporting, ...)
+├── bugbounty/     Scope import/validation, target-type methodology, planner, report
+├── plugins/       Built-in feature plugins (AI workflow, bug bounty, tools, scans, reporting, ...)
 ├── ai/            Offline knowledge-base assistant + local LLM client (no cloud calls)
 ├── reporting/     Jinja2 → HTML/PDF/Markdown report generator
 ├── gui/           PySide6 dark-themed main window and widgets

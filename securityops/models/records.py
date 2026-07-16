@@ -74,6 +74,7 @@ class Finding:
     cvss_score: float | None = None
     cvss_vector: str = ""
     remediation: str = ""
+    reproduction: str = ""               # step-by-step reproduction (bug bounty)
     references: str = ""                 # newline-separated URLs/notes
     id: int | None = None
     created_at: datetime = field(default_factory=utcnow)

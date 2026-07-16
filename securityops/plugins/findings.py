@@ -75,6 +75,8 @@ class FindingsWidget(QWidget):
         self._cvss_vector = QLineEdit()
         self._affected = QLineEdit()
         self._description = QPlainTextEdit()
+        self._reproduction = QPlainTextEdit()
+        self._reproduction.setPlaceholderText("Numbered steps to reproduce (for bug bounty reports)")
         self._remediation = QPlainTextEdit()
         self._references = QPlainTextEdit()
         self._references.setPlaceholderText("One reference per line (URLs, CWE, CVE)")
@@ -85,6 +87,7 @@ class FindingsWidget(QWidget):
         form.addRow("CVSS vector:", self._cvss_vector)
         form.addRow("Affected asset:", self._affected)
         form.addRow("Description:", self._description)
+        form.addRow("Reproduction:", self._reproduction)
 
         remediation_row = QHBoxLayout()
         remediation_row.addWidget(self._remediation)
@@ -154,6 +157,7 @@ class FindingsWidget(QWidget):
         self._cvss_vector.setText(finding.cvss_vector)
         self._affected.setText(finding.affected_asset)
         self._description.setPlainText(finding.description)
+        self._reproduction.setPlainText(finding.reproduction)
         self._remediation.setPlainText(finding.remediation)
         self._references.setPlainText(finding.references)
         self._set_editing_enabled(True)
@@ -189,6 +193,7 @@ class FindingsWidget(QWidget):
         self._current.cvss_vector = self._cvss_vector.text().strip()
         self._current.affected_asset = self._affected.text().strip()
         self._current.description = self._description.toPlainText()
+        self._current.reproduction = self._reproduction.toPlainText()
         self._current.remediation = self._remediation.toPlainText()
         self._current.references = self._references.toPlainText()
         self._ctx.database.findings.update(self._current)
@@ -249,8 +254,8 @@ class FindingsWidget(QWidget):
 
     def _set_editing_enabled(self, enabled: bool) -> None:
         for w in (self._title, self._severity, self._cvss, self._cvss_vector,
-                  self._affected, self._description, self._remediation,
-                  self._references, self._evidence_list):
+                  self._affected, self._description, self._reproduction,
+                  self._remediation, self._references, self._evidence_list):
             w.setEnabled(enabled)
 
 
