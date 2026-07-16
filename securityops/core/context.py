@@ -29,6 +29,9 @@ class AppContext:
     active_project_id: Optional[int] = None
     # Populated lazily to avoid a hard import cycle with the ai package.
     assistant: object | None = field(default=None)
+    # Optional local LLM client (securityops.ai.llm.LocalLLM); None when disabled
+    # or unavailable. Kept as object to keep core free of ai imports.
+    llm: object | None = field(default=None)
 
     def set_active_project(self, project_id: int | None) -> None:
         self.active_project_id = project_id

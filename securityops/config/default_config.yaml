@@ -37,6 +37,14 @@ assistant:
   # The offline assistant is a static knowledge base — no network access.
   enabled: true
 
+llm:
+  # Optional local LLM (Ollama) for the AI Workflow tab. Fully local — talks only
+  # to a server on your own machine. If disabled or unreachable, the workflow
+  # planner and explainer fall back to deterministic rules and still work.
+  enabled: true
+  host: "http://localhost:11434"
+  model: "llama3"
+
 reporting:
   author: "Security Analyst"
   company: "Your Organization"

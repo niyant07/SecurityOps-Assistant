@@ -40,6 +40,14 @@ def build_context() -> AppContext:
 
         context.assistant = Assistant(tools=tools)
 
+    if cfg.get("llm.enabled", True):
+        from .ai.llm import LLMConfig, LocalLLM  # lazy import
+
+        context.llm = LocalLLM(LLMConfig(
+            host=str(cfg.get("llm.host", "http://localhost:11434")),
+            model=str(cfg.get("llm.model", "llama3")),
+        ))
+
     log.info("Application context built (%d tools detected)", len(tools.installed()))
     return context
 

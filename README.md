@@ -20,6 +20,7 @@ services**.
 
 | Area | Capability |
 |------|-----------|
+| **AI Workflow** | Plain-English goal → reviewable plan → approve → background run → findings → plain-English explanation |
 | **Projects** | Create/manage engagements, stored in a local SQLite database |
 | **Assets & Scope** | Inventory hosts/URLs, mark in-scope vs. out-of-scope |
 | **Tool Launcher** | Auto-detects installed Kali tools; builds & launches commands |
@@ -27,8 +28,28 @@ services**.
 | **Evidence** | Attach screenshots, files, and notes to findings |
 | **Findings & Reporting** | Severity, CVSS, remediation, references → HTML/PDF/Markdown |
 | **Assistant** | Offline knowledge base: explains tools, suggests next steps, drafts commands |
-| **Automation** | Repeatable recon / enum / vuln / web-app workflows |
 | **Plugins** | Drop-in modules add new tabs, tools, or report sections |
+
+### AI Workflow (natural language → safe execution)
+
+Type a goal such as *"Identify the IP address and open ports of my website
+example.com"*. The assistant then:
+
+1. Analyzes the request and **refuses** anything harmful (phishing, malware,
+   ransomware, credential theft, DoS).
+2. Resolves the target and proposes an **ordered plan** of Kali tools, each with
+   a rationale and the exact command — built from vetted templates, never from
+   raw model text.
+3. Waits for you to **approve** the specific steps (checkbox per step).
+4. Runs approved steps in the **background**, streaming live output.
+5. **Highlights findings** (open ports, services, discovered paths, reported
+   issues) in a dashboard.
+6. **Explains** each step and the overall result in plain English.
+7. Persists every executed command and its output for **audit**.
+
+Planning and explanation use a **local LLM (Ollama)** when one is running on
+`localhost`; if none is available the app falls back to deterministic rules and
+remains fully functional offline.
 
 ## Architecture
 
@@ -36,8 +57,9 @@ services**.
 securityops/
 ├── core/          Config, logging, SQLite database, threading, plugin & tool managers
 ├── models/        Typed dataclasses for Project, Asset, Scan, Finding, Evidence
-├── plugins/       Built-in feature plugins (tool launcher, scans, reporting, ...)
-├── ai/            Offline knowledge-base assistant (no network calls)
+├── workflow/      AI workflow: plan model, NL planner, output parsers, engine, explainer
+├── plugins/       Built-in feature plugins (AI workflow, tool launcher, scans, reporting, ...)
+├── ai/            Offline knowledge-base assistant + local LLM client (no cloud calls)
 ├── reporting/     Jinja2 → HTML/PDF/Markdown report generator
 ├── gui/           PySide6 dark-themed main window and widgets
 ├── config/        Default YAML configuration
@@ -87,6 +109,22 @@ On first launch the app creates its data directory at
 `~/.local/share/securityops/` (database, logs, evidence) and a config file at
 `~/.config/securityops/config.yaml`.
 
+### Optional: local LLM for the AI Workflow tab
+
+The AI Workflow tab works out of the box using deterministic rules. For more
+fluent planning and explanations, run a **local** [Ollama](https://ollama.com)
+model — no data leaves your machine:
+
+```bash
+# install Ollama (see ollama.com), then:
+ollama pull llama3
+ollama serve      # usually already running as a service
+```
+
+The app auto-detects Ollama on `localhost:11434`. Change the model/host under
+the `llm:` section of `config.yaml`, or set `llm.enabled: false` to force
+rules-only mode.
+
 ## Testing
 
 ```bash
@@ -104,11 +142,16 @@ Environment variable `SECURITYOPS_CONFIG` may point to an alternate file.
 
 ## Security & Privacy
 
-- No telemetry, no network requests, no cloud APIs.
+- No telemetry, no cloud APIs. The only network calls are (a) to a **local**
+  LLM on `localhost` if you enable one, and (b) to the targets you choose to
+  assess.
 - All data stays in your local data directory.
-- The assistant is a static, offline knowledge base — it does not call any LLM.
-- Tools are only launched when you explicitly click **Launch**; commands are
-  shown for review first.
+- The AI planner **refuses** harmful objectives and never executes a step
+  without explicit per-step approval; commands are built from vetted templates,
+  not from raw model output.
+- Every executed command and its output is persisted for audit.
+- Tools are only launched when you explicitly approve/launch them; commands are
+  always shown for review first.
 
 ## License
 

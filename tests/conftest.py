@@ -26,3 +26,18 @@ def project_id(db: Database) -> int:
     project = db.projects.create(Project(name="Test Engagement", authorized=True))
     assert project.id is not None
     return project.id
+
+
+@pytest.fixture()
+def all_installed_tools():
+    """A ToolRegistry with every catalog tool marked as installed.
+
+    Detection normally depends on the host's $PATH; for planner tests we want a
+    deterministic environment where all tools are present.
+    """
+    from securityops.core.tools import ToolRegistry
+
+    registry = ToolRegistry()
+    for detected in registry.all():
+        detected.path = f"/usr/bin/{detected.spec.binary}"
+    return registry
