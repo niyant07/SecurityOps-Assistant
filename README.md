@@ -161,6 +161,17 @@ Configuration is loaded from, in order of precedence:
 
 Environment variable `SECURITYOPS_CONFIG` may point to an alternate file.
 
+## Database & migrations
+
+The SQLite database is created and versioned automatically (`PRAGMA
+user_version`). On startup the app applies any pending schema migrations in
+place, so **existing databases are upgraded automatically on first launch** —
+no manual steps and no data loss. For example, upgrading to the Bug Bounty
+release migrates the database from schema v1 to v2 (adding a `reproduction`
+column to findings) the first time you open an older project. Migrations are
+incremental and forward-only; back up your data directory before upgrading if
+you want a rollback point.
+
 ## Security & Privacy
 
 - No telemetry, no cloud APIs. The only network calls are (a) to a **local**
