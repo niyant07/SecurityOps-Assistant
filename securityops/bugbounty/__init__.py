@@ -18,5 +18,9 @@ Everything runs locally; no cloud services are used.
 from __future__ import annotations
 
 from .scope import Scope, ScopeDecision, ScopeValidator, TargetType, parse_scope_text
+from .triage import Candidate, triage_findings, triage_step
 
-__all__ = ["Scope", "ScopeDecision", "ScopeValidator", "TargetType", "parse_scope_text"]
+__all__ = [
+    "Scope", "ScopeDecision", "ScopeValidator", "TargetType", "parse_scope_text",
+    "Candidate", "triage_findings", "triage_step",
+]

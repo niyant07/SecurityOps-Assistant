@@ -20,12 +20,15 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QTextCursor
 from PySide6.QtWidgets import (
     QComboBox,
+    QDialog,
+    QDialogButtonBox,
     QFileDialog,
     QGroupBox,
     QHBoxLayout,
     QLabel,
     QLineEdit,
     QListWidget,
+    QListWidgetItem,
     QPlainTextEdit,
     QPushButton,
     QScrollArea,
@@ -38,6 +41,7 @@ from PySide6.QtWidgets import (
 from ..bugbounty.planner import BugBountyPlanner
 from ..bugbounty.report import BugBountyReportBundle, BugBountyReportGenerator
 from ..bugbounty.scope import Scope, TargetType, parse_scope_text
+from ..bugbounty.triage import Candidate, triage_findings
 from ..core import paths
 from ..core.plugins import PluginBase, PluginMeta
 from ..gui import widgets
@@ -49,6 +53,60 @@ from ..reporting import ReportFormat
 from .workflow_chat import StepRow
 
 _NOTES_HEADER = "# Bug Bounty Engagement"
+
+
+class TriageDialog(QDialog):
+    """Review auto-triaged candidate issues and choose which to promote to Findings."""
+
+    def __init__(self, candidates: list[Candidate], parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setWindowTitle("Review candidate findings")
+        self.resize(720, 460)
+        self._candidates = candidates
+
+        layout = QVBoxLayout(self)
+        layout.addWidget(QLabel(
+            "The assistant correlated tool output into the candidate issues below. "
+            "These require manual verification. Tick the ones to promote into the "
+            "project's Findings (they will appear in the report)."))
+
+        self._list = QListWidget()
+        for cand in candidates:
+            item = QListWidgetItem(f"[{cand.severity.value}] {cand.title}  —  "
+                                   f"{cand.source_tool}: {cand.evidence[:70]}")
+            item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+            # Pre-check medium+ severity; leave informational unchecked.
+            from ..models import Severity
+            item.setCheckState(Qt.CheckState.Checked if cand.severity.rank >= Severity.MEDIUM.rank
+                               else Qt.CheckState.Unchecked)
+            self._list.addItem(item)
+        layout.addWidget(self._list, stretch=1)
+
+        row = QHBoxLayout()
+        select_all = QPushButton("Select all")
+        select_all.clicked.connect(lambda: self._set_all(True))
+        select_none = QPushButton("Select none")
+        select_none.clicked.connect(lambda: self._set_all(False))
+        row.addWidget(select_all)
+        row.addWidget(select_none)
+        row.addStretch()
+        layout.addLayout(row)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok
+                                   | QDialogButtonBox.StandardButton.Cancel)
+        buttons.button(QDialogButtonBox.StandardButton.Ok).setText("Promote selected")
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+    def _set_all(self, checked: bool) -> None:
+        state = Qt.CheckState.Checked if checked else Qt.CheckState.Unchecked
+        for i in range(self._list.count()):
+            self._list.item(i).setCheckState(state)
+
+    def selected(self) -> list[Candidate]:
+        return [self._candidates[i] for i in range(self._list.count())
+                if self._list.item(i).checkState() == Qt.CheckState.Checked]
 
 
 class BugBountyWidget(QWidget):
@@ -149,9 +207,12 @@ class BugBountyWidget(QWidget):
         self._cancel_btn.clicked.connect(lambda: self._engine.cancel()); self._cancel_btn.setEnabled(False)
         self._next_btn = QPushButton("Recommend next")
         self._next_btn.clicked.connect(self._recommend_next)
+        self._triage_btn = QPushButton("Review & promote findings")
+        self._triage_btn.clicked.connect(self._triage_and_promote)
         self._report_btn = QPushButton("Generate report")
         self._report_btn.clicked.connect(self._generate_report)
-        for b in (self._run_btn, self._cancel_btn, self._next_btn, self._report_btn):
+        for b in (self._run_btn, self._cancel_btn, self._next_btn,
+                  self._triage_btn, self._report_btn):
             ctrl.addWidget(b)
         lcol.addLayout(ctrl)
         splitter.addWidget(left)
@@ -370,6 +431,32 @@ class BugBountyWidget(QWidget):
             return
         rec = self._planner.recommend_next(self._scope, self._completed_tools)
         self._say("Assistant", f"Next step: {rec}")
+
+    def _triage_and_promote(self) -> None:
+        """Correlate tool output into candidate issues and promote chosen ones."""
+        project_id = self._ctx.active_project_id
+        if project_id is None:
+            widgets.warn(self, "No project", "Select or create a project first.")
+            return
+        if self._plan is None or not any(getattr(s, "findings", None) for s in self._plan.steps):
+            widgets.info(self, "Nothing to triage",
+                         "Run an assessment first — there are no tool findings yet.")
+            return
+        candidates = triage_findings(self._plan.steps)
+        if not candidates:
+            widgets.info(self, "No candidates",
+                         "No candidate issues could be derived from the current output.")
+            return
+        dialog = TriageDialog(candidates, self)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        chosen = dialog.selected()
+        for cand in chosen:
+            self._ctx.database.findings.create(cand.to_finding(project_id))
+        self._say("Assistant",
+                  f"Promoted {len(chosen)} candidate issue(s) to the project Findings. "
+                  f"They now appear in the Findings tab and the report — verify each "
+                  f"before disclosure.")
 
     def _generate_report(self) -> None:
         project_id = self._ctx.active_project_id

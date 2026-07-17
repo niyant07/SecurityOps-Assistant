@@ -65,9 +65,12 @@ project database, workflow engine, and reporting:
 3. **Target-type methodology** — pick Web / API / Mobile backend / Desktop /
    Network and get a tailored recon → enumeration → assessment chain.
 4. **Approve & run** on the same background engine, with findings highlighted.
-5. **Recommend next step** — the assistant suggests the next methodology phase
+5. **Correlate & triage** — tool output is classified into candidate issues with
+   suggested CVSS severity, flagged for verification; review them and promote the
+   real ones into the project's Findings (which then flow into the report).
+6. **Recommend next step** — the assistant suggests the next methodology phase
    based on what has already run and the scope.
-6. **Bug bounty report** — Executive summary, Scope, Methodology, Findings
+7. **Bug bounty report** — Executive summary, Scope, Methodology, Findings
    (severity / CVSS / evidence), **reproduction steps**, remediation, and
    references, exported to HTML / PDF / Markdown.
 
@@ -78,7 +81,7 @@ securityops/
 ├── core/          Config, logging, SQLite database, threading, plugin & tool managers
 ├── models/        Typed dataclasses for Project, Asset, Scan, Finding, Evidence
 ├── workflow/      AI workflow: plan model, NL planner, output parsers, engine, explainer
-├── bugbounty/     Scope import/validation, target-type methodology, planner, report
+├── bugbounty/     Scope import/validation, methodology, planner, triage, report
 ├── plugins/       Built-in feature plugins (AI workflow, bug bounty, tools, scans, reporting, ...)
 ├── ai/            Offline knowledge-base assistant + local LLM client (no cloud calls)
 ├── reporting/     Jinja2 → HTML/PDF/Markdown report generator
