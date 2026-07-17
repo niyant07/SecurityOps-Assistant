@@ -7,15 +7,25 @@ them framework-free makes them trivial to unit test.
 
 from __future__ import annotations
 
-from .enums import AssetType, ScanStatus, ScopeState, Severity
-from .records import Asset, Evidence, Finding, Project, Scan
+from .enums import (
+    AssetType,
+    Confidence,
+    DisclosureStatus,
+    ScanStatus,
+    ScopeState,
+    Severity,
+)
+from .records import Asset, Disclosure, Evidence, Finding, Project, Scan
 
 __all__ = [
     "AssetType",
+    "Confidence",
+    "DisclosureStatus",
     "ScanStatus",
     "ScopeState",
     "Severity",
     "Asset",
+    "Disclosure",
     "Evidence",
     "Finding",
     "Project",

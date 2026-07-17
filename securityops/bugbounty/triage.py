@@ -15,7 +15,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
-from ..models import Finding, Severity
+from ..models import Confidence, Finding, Severity
 
 
 @dataclass
@@ -46,6 +46,8 @@ class Candidate:
             cvss_score=None,
             reproduction=self.reproduction,
             references=self.references,
+            # Auto-triaged issues always require manual verification.
+            confidence=Confidence.TENTATIVE if self.requires_verification else Confidence.FIRM,
         )
 
 

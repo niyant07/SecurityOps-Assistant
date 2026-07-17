@@ -11,6 +11,7 @@ future migrations have a hook.
 
 from __future__ import annotations
 
+import re
 import sqlite3
 import threading
 from datetime import datetime, timezone
@@ -20,6 +21,9 @@ from typing import Any, Iterable
 from ..models import (
     Asset,
     AssetType,
+    Confidence,
+    Disclosure,
+    DisclosureStatus,
     Evidence,
     Finding,
     Project,
@@ -32,7 +36,7 @@ from .logging_config import get_logger
 
 _LOG = get_logger("database")
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS projects (
@@ -83,6 +87,8 @@ CREATE TABLE IF NOT EXISTS findings (
     remediation   TEXT NOT NULL DEFAULT '',
     reproduction  TEXT NOT NULL DEFAULT '',
     references_   TEXT NOT NULL DEFAULT '',
+    confidence    TEXT NOT NULL DEFAULT 'Firm',
+    business_impact TEXT NOT NULL DEFAULT '',
     created_at    TEXT NOT NULL,
     updated_at    TEXT NOT NULL
 );
@@ -97,10 +103,25 @@ CREATE TABLE IF NOT EXISTS evidence (
     created_at   TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS disclosures (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id     INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    report_version TEXT NOT NULL DEFAULT 'v1',
+    recipient      TEXT NOT NULL DEFAULT '',
+    method         TEXT NOT NULL DEFAULT '',
+    status         TEXT NOT NULL,
+    subject        TEXT NOT NULL DEFAULT '',
+    notes          TEXT NOT NULL DEFAULT '',
+    report_path    TEXT NOT NULL DEFAULT '',
+    created_at     TEXT NOT NULL,
+    updated_at     TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_assets_project   ON assets(project_id);
 CREATE INDEX IF NOT EXISTS idx_scans_project    ON scans(project_id);
 CREATE INDEX IF NOT EXISTS idx_findings_project ON findings(project_id);
 CREATE INDEX IF NOT EXISTS idx_evidence_project ON evidence(project_id);
+CREATE INDEX IF NOT EXISTS idx_disclosures_project ON disclosures(project_id);
 """
 
 
@@ -325,6 +346,8 @@ class FindingRepo(_BaseRepo):
             remediation=r["remediation"],
             reproduction=r["reproduction"],
             references=r["references_"],
+            confidence=Confidence(r["confidence"]),
+            business_impact=r["business_impact"],
             created_at=_parse(r["created_at"]),  # type: ignore[arg-type]
             updated_at=_parse(r["updated_at"]),  # type: ignore[arg-type]
         )
@@ -333,8 +356,8 @@ class FindingRepo(_BaseRepo):
         cur = self._db.execute(
             "INSERT INTO findings (project_id, title, severity, description, "
             "affected_asset, cvss_score, cvss_vector, remediation, reproduction, "
-            "references_, created_at, updated_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "references_, confidence, business_impact, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 finding.project_id,
                 finding.title,
@@ -346,6 +369,8 @@ class FindingRepo(_BaseRepo):
                 finding.remediation,
                 finding.reproduction,
                 finding.references,
+                finding.confidence.value,
+                finding.business_impact,
                 _iso(finding.created_at),
                 _iso(finding.updated_at),
             ),
@@ -360,7 +385,7 @@ class FindingRepo(_BaseRepo):
         self._db.execute(
             "UPDATE findings SET title=?, severity=?, description=?, affected_asset=?, "
             "cvss_score=?, cvss_vector=?, remediation=?, reproduction=?, references_=?, "
-            "updated_at=? WHERE id=?",
+            "confidence=?, business_impact=?, updated_at=? WHERE id=?",
             (
                 finding.title,
                 finding.severity.value,
@@ -371,6 +396,8 @@ class FindingRepo(_BaseRepo):
                 finding.remediation,
                 finding.reproduction,
                 finding.references,
+                finding.confidence.value,
+                finding.business_impact,
                 _iso(finding.updated_at),
                 finding.id,
             ),
@@ -436,6 +463,85 @@ class EvidenceRepo(_BaseRepo):
         self._db.execute("DELETE FROM evidence WHERE id=?", (evidence_id,))
 
 
+class DisclosureRepo(_BaseRepo):
+    @staticmethod
+    def _row(r: sqlite3.Row) -> Disclosure:
+        return Disclosure(
+            id=r["id"],
+            project_id=r["project_id"],
+            report_version=r["report_version"],
+            recipient=r["recipient"],
+            method=r["method"],
+            status=DisclosureStatus(r["status"]),
+            subject=r["subject"],
+            notes=r["notes"],
+            report_path=r["report_path"],
+            created_at=_parse(r["created_at"]),  # type: ignore[arg-type]
+            updated_at=_parse(r["updated_at"]),  # type: ignore[arg-type]
+        )
+
+    def create(self, disclosure: Disclosure) -> Disclosure:
+        cur = self._db.execute(
+            "INSERT INTO disclosures (project_id, report_version, recipient, method, "
+            "status, subject, notes, report_path, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                disclosure.project_id,
+                disclosure.report_version,
+                disclosure.recipient,
+                disclosure.method,
+                disclosure.status.value,
+                disclosure.subject,
+                disclosure.notes,
+                disclosure.report_path,
+                _iso(disclosure.created_at),
+                _iso(disclosure.updated_at),
+            ),
+        )
+        disclosure.id = int(cur.lastrowid)
+        _LOG.info("Recorded disclosure id=%s status=%s recipient=%r",
+                  disclosure.id, disclosure.status.value, disclosure.recipient)
+        return disclosure
+
+    def update(self, disclosure: Disclosure) -> None:
+        if disclosure.id is None:
+            raise ValueError("Cannot update a disclosure without an id")
+        disclosure.updated_at = datetime.now(timezone.utc)
+        self._db.execute(
+            "UPDATE disclosures SET report_version=?, recipient=?, method=?, status=?, "
+            "subject=?, notes=?, report_path=?, updated_at=? WHERE id=?",
+            (
+                disclosure.report_version,
+                disclosure.recipient,
+                disclosure.method,
+                disclosure.status.value,
+                disclosure.subject,
+                disclosure.notes,
+                disclosure.report_path,
+                _iso(disclosure.updated_at),
+                disclosure.id,
+            ),
+        )
+
+    def list_for_project(self, project_id: int) -> list[Disclosure]:
+        rows = self._db.query_all(
+            "SELECT * FROM disclosures WHERE project_id=? ORDER BY created_at DESC",
+            (project_id,),
+        )
+        return [self._row(r) for r in rows]
+
+    def next_version(self, project_id: int) -> str:
+        """Return the next report version string, e.g. 'v3'."""
+        rows = self._db.query_all(
+            "SELECT report_version FROM disclosures WHERE project_id=?", (project_id,))
+        nums = []
+        for r in rows:
+            m = re.match(r"v(\d+)", str(r["report_version"]))
+            if m:
+                nums.append(int(m.group(1)))
+        return f"v{(max(nums) + 1) if nums else 1}"
+
+
 # --------------------------------------------------------------------------- #
 # Database
 # --------------------------------------------------------------------------- #
@@ -457,6 +563,7 @@ class Database:
         self.scans = ScanRepo(self)
         self.findings = FindingRepo(self)
         self.evidence = EvidenceRepo(self)
+        self.disclosures = DisclosureRepo(self)
         _LOG.info("Database ready at %s", self._path)
 
     # -- schema ----------------------------------------------------------- #
@@ -482,6 +589,17 @@ class Database:
                 _LOG.info("Migrating findings table to schema v2 (add reproduction)")
                 self._conn.execute(
                     "ALTER TABLE findings ADD COLUMN reproduction TEXT NOT NULL DEFAULT ''")
+        if from_version < 3:
+            cols = {row["name"] for row in
+                    self._conn.execute("PRAGMA table_info(findings)")}
+            if "confidence" not in cols:
+                _LOG.info("Migrating findings table to schema v3 (add confidence)")
+                self._conn.execute(
+                    "ALTER TABLE findings ADD COLUMN confidence TEXT NOT NULL DEFAULT 'Firm'")
+            if "business_impact" not in cols:
+                self._conn.execute(
+                    "ALTER TABLE findings ADD COLUMN business_impact TEXT NOT NULL DEFAULT ''")
+            # disclosures table is created by executescript (CREATE TABLE IF NOT EXISTS).
 
     # -- low-level helpers ------------------------------------------------ #
     def execute(self, sql: str, params: Iterable[Any] = ()) -> sqlite3.Cursor:

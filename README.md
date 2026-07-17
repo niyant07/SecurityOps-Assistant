@@ -22,6 +22,7 @@ services**.
 |------|-----------|
 | **AI Workflow** | Plain-English goal → reviewable plan → approve → background run → findings → plain-English explanation |
 | **AI Bug Bounty** | Import & validate engagement scope, build a target-type methodology, run in-scope-only steps, report with reproduction steps |
+| **Responsible Disclosure** | Curate findings, draft a disclosure report + email, detect the target's security.txt, prepare (never auto-send) and record submissions |
 | **Projects** | Create/manage engagements, stored in a local SQLite database |
 | **Assets & Scope** | Inventory hosts/URLs, mark in-scope vs. out-of-scope |
 | **Tool Launcher** | Auto-detects installed Kali tools; builds & launches commands |
@@ -51,6 +52,27 @@ example.com"*. The assistant then:
 Planning and explanation use a **local LLM (Ollama)** when one is running on
 `localhost`; if none is available the app falls back to deterministic rules and
 remains fully functional offline.
+
+### Responsible Disclosure & Reporting
+
+After an authorized assessment, the Disclosure tab helps you disclose findings
+responsibly — with a human in control at every step:
+
+1. **Curate** — deduplicate findings, rank by severity then confidence, and flag
+   items still marked *Tentative* (requiring manual verification).
+2. **Draft report** — an editable disclosure report with Executive Summary,
+   Scope, Methodology, Technical Findings, CVSS, Business Impact, Evidence,
+   Reproduction Steps, Remediation, References, and a Timeline of Assessment.
+3. **Detect the security contact** — parse or fetch the target's RFC 9116
+   `security.txt` and auto-fill the recipient.
+4. **Draft a professional, vendor-friendly email** (LLM-refined if available).
+5. **Approve & prepare** — on explicit approval the app saves the report and an
+   `.eml` draft and opens your mail client. **It never sends anything itself** —
+   you deliver it through the organization's published process and confirm.
+6. **Record** every submission (version, recipient, status, date) locally.
+
+Safety: disclosure is refused for unauthorized or out-of-scope targets, and no
+finding is ever fabricated — each carries a confidence level and evidence.
 
 ### AI Bug Bounty Assistant
 
@@ -82,7 +104,8 @@ securityops/
 ├── models/        Typed dataclasses for Project, Asset, Scan, Finding, Evidence
 ├── workflow/      AI workflow: plan model, NL planner, output parsers, engine, explainer
 ├── bugbounty/     Scope import/validation, methodology, planner, triage, report
-├── plugins/       Built-in feature plugins (AI workflow, bug bounty, tools, scans, reporting, ...)
+├── disclosure/    Finding curation, security.txt, disclosure email & report
+├── plugins/       Built-in feature plugins (AI workflow, bug bounty, disclosure, tools, ...)
 ├── ai/            Offline knowledge-base assistant + local LLM client (no cloud calls)
 ├── reporting/     Jinja2 → HTML/PDF/Markdown report generator
 ├── gui/           PySide6 dark-themed main window and widgets

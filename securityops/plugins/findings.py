@@ -26,7 +26,7 @@ from PySide6.QtWidgets import (
 from ..core import paths
 from ..core.plugins import PluginBase, PluginMeta
 from ..gui import widgets
-from ..models import Evidence, Finding, Severity
+from ..models import Confidence, Evidence, Finding, Severity
 
 
 class FindingsWidget(QWidget):
@@ -73,8 +73,13 @@ class FindingsWidget(QWidget):
         self._cvss.setSingleStep(0.1)
         self._cvss.valueChanged.connect(self._sync_severity_from_cvss)
         self._cvss_vector = QLineEdit()
+        self._confidence = QComboBox()
+        for cf in Confidence:
+            self._confidence.addItem(cf.value, cf)
         self._affected = QLineEdit()
         self._description = QPlainTextEdit()
+        self._business = QPlainTextEdit()
+        self._business.setPlaceholderText("Business impact (used in disclosure reports)")
         self._reproduction = QPlainTextEdit()
         self._reproduction.setPlaceholderText("Numbered steps to reproduce (for bug bounty reports)")
         self._remediation = QPlainTextEdit()
@@ -83,10 +88,12 @@ class FindingsWidget(QWidget):
 
         form.addRow("Title:", self._title)
         form.addRow("Severity:", self._severity)
+        form.addRow("Confidence:", self._confidence)
         form.addRow("CVSS score:", self._cvss)
         form.addRow("CVSS vector:", self._cvss_vector)
         form.addRow("Affected asset:", self._affected)
         form.addRow("Description:", self._description)
+        form.addRow("Business impact:", self._business)
         form.addRow("Reproduction:", self._reproduction)
 
         remediation_row = QHBoxLayout()
@@ -156,7 +163,9 @@ class FindingsWidget(QWidget):
         self._cvss.blockSignals(False)
         self._cvss_vector.setText(finding.cvss_vector)
         self._affected.setText(finding.affected_asset)
+        self._confidence.setCurrentText(finding.confidence.value)
         self._description.setPlainText(finding.description)
+        self._business.setPlainText(finding.business_impact)
         self._reproduction.setPlainText(finding.reproduction)
         self._remediation.setPlainText(finding.remediation)
         self._references.setPlainText(finding.references)
@@ -192,7 +201,9 @@ class FindingsWidget(QWidget):
         self._current.cvss_score = self._cvss.value() or None
         self._current.cvss_vector = self._cvss_vector.text().strip()
         self._current.affected_asset = self._affected.text().strip()
+        self._current.confidence = self._confidence.currentData()
         self._current.description = self._description.toPlainText()
+        self._current.business_impact = self._business.toPlainText()
         self._current.reproduction = self._reproduction.toPlainText()
         self._current.remediation = self._remediation.toPlainText()
         self._current.references = self._references.toPlainText()
@@ -253,9 +264,10 @@ class FindingsWidget(QWidget):
         self._reload_evidence()
 
     def _set_editing_enabled(self, enabled: bool) -> None:
-        for w in (self._title, self._severity, self._cvss, self._cvss_vector,
-                  self._affected, self._description, self._reproduction,
-                  self._remediation, self._references, self._evidence_list):
+        for w in (self._title, self._severity, self._confidence, self._cvss,
+                  self._cvss_vector, self._affected, self._description, self._business,
+                  self._reproduction, self._remediation, self._references,
+                  self._evidence_list):
             w.setEnabled(enabled)
 
 

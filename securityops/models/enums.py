@@ -54,6 +54,42 @@ class Severity(str, Enum):
         return cls.CRITICAL
 
 
+class Confidence(str, Enum):
+    """How strongly a finding is substantiated by collected evidence.
+
+    Used to rank disclosures and to flag issues that still need manual
+    verification. Never report a fabricated issue — an unverified observation
+    must be marked ``TENTATIVE``.
+    """
+
+    CONFIRMED = "Confirmed"      # reproduced with concrete evidence
+    FIRM = "Firm"                # strong evidence, minor verification remaining
+    TENTATIVE = "Tentative"      # requires additional manual verification
+
+    @property
+    def rank(self) -> int:
+        return {
+            Confidence.TENTATIVE: 0,
+            Confidence.FIRM: 1,
+            Confidence.CONFIRMED: 2,
+        }[self]
+
+    @property
+    def needs_verification(self) -> bool:
+        return self is Confidence.TENTATIVE
+
+
+class DisclosureStatus(str, Enum):
+    """Lifecycle of a responsible-disclosure submission."""
+
+    DRAFT = "Draft"
+    APPROVED = "Approved"           # user approved; ready to deliver
+    PREPARED = "Prepared"           # email/report handed to mail client or exported
+    SUBMITTED = "Submitted"         # user confirmed it was sent
+    ACKNOWLEDGED = "Acknowledged"   # vendor acknowledged receipt
+    CLOSED = "Closed"
+
+
 class ScanStatus(str, Enum):
     """Lifecycle state of a launched scan/task."""
 

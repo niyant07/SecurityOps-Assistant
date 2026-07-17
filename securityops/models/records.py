@@ -9,7 +9,14 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
-from .enums import AssetType, ScanStatus, ScopeState, Severity
+from .enums import (
+    AssetType,
+    Confidence,
+    DisclosureStatus,
+    ScanStatus,
+    ScopeState,
+    Severity,
+)
 
 
 def utcnow() -> datetime:
@@ -76,6 +83,8 @@ class Finding:
     remediation: str = ""
     reproduction: str = ""               # step-by-step reproduction (bug bounty)
     references: str = ""                 # newline-separated URLs/notes
+    confidence: Confidence = Confidence.FIRM
+    business_impact: str = ""            # impact narrative for disclosure reports
     id: int | None = None
     created_at: datetime = field(default_factory=utcnow)
     updated_at: datetime = field(default_factory=utcnow)
@@ -92,3 +101,20 @@ class Evidence:
     caption: str = ""
     id: int | None = None
     created_at: datetime = field(default_factory=utcnow)
+
+
+@dataclass
+class Disclosure:
+    """A responsible-disclosure submission record (history + delivery audit)."""
+
+    project_id: int
+    report_version: str = "v1"
+    recipient: str = ""                  # security contact the report was addressed to
+    method: str = ""                     # "email", "bug bounty platform", "manual", ...
+    status: DisclosureStatus = DisclosureStatus.DRAFT
+    subject: str = ""
+    notes: str = ""
+    report_path: str = ""                # local path to the saved report
+    id: int | None = None
+    created_at: datetime = field(default_factory=utcnow)
+    updated_at: datetime = field(default_factory=utcnow)
