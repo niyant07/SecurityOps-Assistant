@@ -1,0 +1,106 @@
+<!-- Responsible disclosure vulnerability report (full HTML document). -->
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Responsible Disclosure — {{ target }}</title>
+<style>
+  :root { --crit:#f85149; --high:#db6d28; --med:#d29922; --low:#3fb950; --info:#6c8ebf; }
+  * { box-sizing: border-box; }
+  body { font-family: "DejaVu Sans", Arial, sans-serif; color:#1b1f24; margin:0; line-height:1.55; }
+  .banner { background:#12161c; color:#e6edf3; text-align:center; padding:6px; font-size:12px; letter-spacing:2px; }
+  .page { max-width: 920px; margin: 0 auto; padding: 32px 40px; }
+  h1 { font-size: 25px; margin-bottom: 2px; }
+  h2 { font-size: 19px; border-bottom: 2px solid #d0d7de; padding-bottom: 6px; margin-top: 32px; }
+  h3 { font-size: 15px; margin-bottom: 4px; }
+  .meta { color:#57606a; font-size: 13px; }
+  table { width:100%; border-collapse: collapse; margin: 12px 0; font-size: 13px; }
+  th, td { border:1px solid #d0d7de; padding:8px 10px; text-align:left; vertical-align: top; }
+  th { background:#f6f8fa; }
+  .sev { display:inline-block; padding:2px 10px; border-radius:10px; color:#fff; font-size:12px; font-weight:600; }
+  .sev-Critical{background:var(--crit);} .sev-High{background:var(--high);}
+  .sev-Medium{background:var(--med);} .sev-Low{background:var(--low);}
+  .sev-Informational{background:var(--info);}
+  .conf { display:inline-block; padding:2px 8px; border-radius:10px; font-size:11px; border:1px solid #b0bac5; color:#44505c; }
+  .flag { color:#b7791f; font-weight:600; }
+  .finding { border:1px solid #d0d7de; border-radius:8px; padding:16px 20px; margin:16px 0; }
+  .finding h3 { margin-top:0; }
+  .kv { font-size:13px; color:#57606a; margin:2px 0; }
+  pre, .repro { background:#f6f8fa; padding:10px; border-radius:6px; overflow-x:auto; font-size:12.5px; white-space:pre-wrap; }
+  .evidence img { max-width:100%; border:1px solid #d0d7de; border-radius:6px; margin:6px 0; }
+  footer { color:#8b949e; font-size:11px; text-align:center; margin-top:40px; }
+</style>
+</head>
+<body>
+<div class="banner">{{ classification }} — RESPONSIBLE DISCLOSURE</div>
+<div class="page">
+
+  <h1>Vulnerability Disclosure Report</h1>
+  <div class="meta">
+    Target: {{ target }}{% if organization %} &middot; {{ organization }}{% endif %}<br/>
+    Prepared by {{ author }}{% if company %}, {{ company }}{% endif %}
+    &middot; Report {{ report_version }} &middot; {{ generated_at }}
+  </div>
+
+  <h2>1. Executive Summary</h2>
+  <p>{{ executive_summary }}</p>
+  <table>
+    <thead><tr><th>Severity</th><th>Count</th></tr></thead>
+    <tbody>
+    {% for sev, count in severity_counts %}<tr><td>{{ sev }}</td><td>{{ count }}</td></tr>{% endfor %}
+    </tbody>
+  </table>
+  {% if needs_verification %}
+  <p class="flag">Note: {{ needs_verification }} finding(s) are marked as requiring
+  additional manual verification and should be treated as tentative.</p>
+  {% endif %}
+
+  <h2>2. Scope</h2>
+  <p>{{ scope | replace('\n','<br/>') | safe }}</p>
+
+  <h2>3. Assessment Methodology</h2>
+  <pre>{{ methodology }}</pre>
+
+  <h2>4. Technical Findings</h2>
+  {% if not findings %}<p>No verified findings were recorded.</p>{% endif %}
+  {% for f in findings %}
+  <div class="finding">
+    <h3>{{ loop.index }}. {{ f.title }}
+      <span class="sev sev-{{ f.severity.value }}">{{ f.severity.value }}</span>
+      <span class="conf">Confidence: {{ f.confidence.value }}</span>
+      {% if f.confidence.value == 'Tentative' %}<span class="flag"> ⚑ verify</span>{% endif %}
+    </h3>
+    <div class="kv"><strong>Affected asset:</strong> {{ f.affected_asset or "—" }}</div>
+    {% if f.cvss_score is not none %}
+    <div class="kv"><strong>Severity (CVSS):</strong> {{ "%.1f"|format(f.cvss_score) }}
+      {% if f.cvss_vector %}({{ f.cvss_vector }}){% endif %}</div>
+    {% endif %}
+    <p><strong>Description.</strong> {{ f.description | replace('\n','<br/>') | safe }}</p>
+    {% if f.business_impact %}<p><strong>Business impact.</strong> {{ f.business_impact | replace('\n','<br/>') | safe }}</p>{% endif %}
+    {% if f.reproduction %}<p><strong>Steps to reproduce.</strong></p><div class="repro">{{ f.reproduction }}</div>{% endif %}
+    {% set ev = evidence_by_finding.get(f.id, []) %}
+    {% if ev %}
+    <div class="evidence"><strong>Evidence.</strong>
+      {% for e in ev %}<div>{{ e.caption }}{% if e.kind == 'screenshot' and e.embedded %}<br/><img src="{{ e.embedded }}"/>{% endif %}</div>{% endfor %}
+    </div>
+    {% endif %}
+    {% if f.remediation %}<p><strong>Suggested remediation.</strong> {{ f.remediation | replace('\n','<br/>') | safe }}</p>{% endif %}
+    {% if f.references %}<p><strong>References.</strong><br/>{{ f.references | replace('\n','<br/>') | safe }}</p>{% endif %}
+  </div>
+  {% endfor %}
+
+  <h2>5. Timeline of Assessment</h2>
+  <table>
+    <thead><tr><th>Date</th><th>Event</th></tr></thead>
+    <tbody>
+    {% for when, event in timeline %}<tr><td>{{ when }}</td><td>{{ event }}</td></tr>{% endfor %}
+    </tbody>
+  </table>
+
+  <footer>
+    {{ classification }} &middot; Responsible disclosure report &middot; {{ generated_at }}<br/>
+    Shared in good faith for remediation. Every finding is backed by collected evidence
+    and marked with a confidence level; no findings are fabricated.
+  </footer>
+</div>
+</body>
+</html>

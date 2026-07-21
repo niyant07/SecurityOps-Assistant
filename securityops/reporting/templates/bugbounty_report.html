@@ -1,0 +1,128 @@
+<!-- Bug bounty assessment report template (rendered to a full HTML document). -->
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>{{ scope.program or project.name }} — Bug Bounty Assessment</title>
+<style>
+  :root { --crit:#f85149; --high:#db6d28; --med:#d29922; --low:#3fb950; --info:#6c8ebf; }
+  * { box-sizing: border-box; }
+  body { font-family: "DejaVu Sans", Arial, sans-serif; color:#1b1f24; margin:0; line-height:1.5; }
+  .banner { background:#12161c; color:#e6edf3; text-align:center; padding:6px; font-size:12px; letter-spacing:2px; }
+  .page { max-width: 920px; margin: 0 auto; padding: 32px 40px; }
+  h1 { font-size: 26px; margin-bottom: 2px; }
+  h2 { font-size: 20px; border-bottom: 2px solid #d0d7de; padding-bottom: 6px; margin-top: 34px; }
+  h3 { font-size: 16px; margin-bottom: 4px; }
+  .meta { color:#57606a; font-size: 13px; }
+  table { width:100%; border-collapse: collapse; margin: 12px 0; font-size: 13px; }
+  th, td { border:1px solid #d0d7de; padding:8px 10px; text-align:left; vertical-align: top; }
+  th { background:#f6f8fa; }
+  .cols { display:flex; gap:24px; }
+  .cols > div { flex:1; }
+  .sev { display:inline-block; padding:2px 10px; border-radius: 10px; color:#fff; font-size:12px; font-weight:600; }
+  .sev-Critical{background:var(--crit);} .sev-High{background:var(--high);}
+  .sev-Medium{background:var(--med);} .sev-Low{background:var(--low);}
+  .sev-Informational{background:var(--info);}
+  .finding { border:1px solid #d0d7de; border-radius:8px; padding:16px 20px; margin:16px 0; }
+  .finding h3 { margin-top:0; }
+  .kv { font-size:13px; color:#57606a; margin:2px 0; }
+  pre, .repro { background:#f6f8fa; padding:10px; border-radius:6px; overflow-x:auto; font-size:12.5px; white-space:pre-wrap; }
+  ul { margin:6px 0; padding-left:20px; }
+  .evidence img { max-width:100%; border:1px solid #d0d7de; border-radius:6px; margin:6px 0; }
+  footer { color:#8b949e; font-size:11px; text-align:center; margin-top:40px; }
+</style>
+</head>
+<body>
+<div class="banner">{{ classification }}</div>
+<div class="page">
+
+  <h1>{{ scope.program or project.name }}</h1>
+  <div class="meta">
+    Bug Bounty Security Assessment
+    {% if scope.platform %} &middot; {{ scope.platform }}{% endif %}
+    &middot; {{ scope.target_type }}<br/>
+    Prepared by {{ author }}{% if company %}, {{ company }}{% endif %} &middot; {{ generated_at }}
+  </div>
+
+  <h2>1. Executive Summary</h2>
+  <p>{{ executive_summary }}</p>
+
+  <h2>2. Scope</h2>
+  <div class="cols">
+    <div>
+      <h3>In scope</h3>
+      {% if scope.in_scope %}<ul>{% for t in scope.in_scope %}<li>{{ t }}</li>{% endfor %}</ul>
+      {% else %}<p class="meta">None specified.</p>{% endif %}
+    </div>
+    <div>
+      <h3>Out of scope</h3>
+      {% if scope.out_of_scope %}<ul>{% for t in scope.out_of_scope %}<li>{{ t }}</li>{% endfor %}</ul>
+      {% else %}<p class="meta">None specified.</p>{% endif %}
+    </div>
+  </div>
+  {% if scope.rules %}<h3>Engagement rules</h3><p>{{ scope.rules | replace('\n','<br/>') | safe }}</p>{% endif %}
+
+  <h2>3. Methodology</h2>
+  <pre>{{ methodology }}</pre>
+
+  <h2>4. Findings</h2>
+  <table>
+    <thead><tr><th>#</th><th>Finding</th><th>Severity</th><th>CVSS</th></tr></thead>
+    <tbody>
+    {% for f in findings %}
+      <tr><td>{{ loop.index }}</td><td>{{ f.title }}</td>
+          <td><span class="sev sev-{{ f.severity.value }}">{{ f.severity.value }}</span></td>
+          <td>{{ "%.1f"|format(f.cvss_score) if f.cvss_score is not none else "—" }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% if not findings %}<p>No findings were recorded for this assessment.</p>{% endif %}
+
+  {% for f in findings %}
+  <div class="finding">
+    <h3>{{ loop.index }}. {{ f.title }}
+      <span class="sev sev-{{ f.severity.value }}">{{ f.severity.value }}</span></h3>
+    <div class="kv"><strong>Affected asset:</strong> {{ f.affected_asset or "—" }}</div>
+    {% if f.cvss_score is not none %}
+    <div class="kv"><strong>CVSS:</strong> {{ "%.1f"|format(f.cvss_score) }}
+      {% if f.cvss_vector %}({{ f.cvss_vector }}){% endif %}</div>
+    {% endif %}
+    <p><strong>Description.</strong> {{ f.description | replace('\n','<br/>') | safe }}</p>
+    {% if f.reproduction %}
+    <p><strong>Steps to reproduce.</strong></p>
+    <div class="repro">{{ f.reproduction }}</div>
+    {% endif %}
+    {% set ev = evidence_by_finding.get(f.id, []) %}
+    {% if ev %}
+    <div class="evidence"><strong>Evidence.</strong>
+      {% for e in ev %}
+        <div>{{ e.caption }}
+        {% if e.kind == 'screenshot' and e.embedded %}<br/><img src="{{ e.embedded }}"/>{% endif %}
+        </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+    {% if f.remediation %}<p><strong>Remediation.</strong> {{ f.remediation | replace('\n','<br/>') | safe }}</p>{% endif %}
+    {% if f.references %}<p><strong>References.</strong><br/>{{ f.references | replace('\n','<br/>') | safe }}</p>{% endif %}
+  </div>
+  {% endfor %}
+
+  {% if scans %}
+  <h2>5. Testing Activity</h2>
+  <table>
+    <thead><tr><th>Tool</th><th>Target</th><th>Status</th><th>When</th></tr></thead>
+    <tbody>
+    {% for s in scans %}
+      <tr><td>{{ s.tool }}</td><td>{{ s.target }}</td><td>{{ s.status.value }}</td>
+          <td>{{ s.created_at.strftime('%Y-%m-%d %H:%M') if s.created_at else '' }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+
+  <footer>
+    {{ classification }} &middot; Generated by SecurityOps Assistant &middot; {{ generated_at }}<br/>
+    Authorized bug bounty assessment. Findings require manual verification before disclosure.
+  </footer>
+</div>
+</body>
+</html>

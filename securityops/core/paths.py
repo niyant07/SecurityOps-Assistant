@@ -64,6 +64,18 @@ def reports_dir() -> Path:
     return _ensure(data_dir() / "reports")
 
 
+def downloads_dir() -> Path:
+    """The user's Downloads folder (for one-click report downloads).
+
+    Honors the XDG user-dirs ``XDG_DOWNLOAD_DIR`` on Linux when set, otherwise
+    falls back to ``~/Downloads``. Created if it does not yet exist.
+    """
+    env = os.environ.get("XDG_DOWNLOAD_DIR")
+    if env:
+        return _ensure(Path(os.path.expandvars(env)))
+    return _ensure(_home() / "Downloads")
+
+
 def user_config_file() -> Path:
     """Path to the user's config file (may not yet exist)."""
     return config_dir() / "config.yaml"

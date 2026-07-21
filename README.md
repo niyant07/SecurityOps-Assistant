@@ -14,12 +14,30 @@ services**.
 > exploitation or attacks on its own — it organizes work and launches
 > operator-approved tools.
 
+## Objective
+
+To design and develop a **local-first, AI-assisted desktop platform** that
+converts an analyst's plain-English objective into a **safe, approval-gated**
+cybersecurity assessment workflow, and carries it through execution, evidence
+collection, and professional reporting — **entirely offline**, for authorized
+security testing only.
+
+Supporting goals: interpret natural-language goals into reviewable plans; enforce
+safety by design (approval gates, scope validation, refusal of harmful requests);
+auto-detect and coordinate Kali tools from one interface; correlate output into
+ranked, evidence-backed findings with CVSS and confidence; and generate
+assessment and responsible-disclosure reports — all with a local AI model that
+keeps data private.
+
 ---
 
 ## Features
 
 | Area | Capability |
 |------|-----------|
+| **AI Workflow** | Plain-English goal → reviewable plan → approve → background run → findings → plain-English explanation |
+| **AI Bug Bounty** | Import & validate engagement scope, build a target-type methodology, run in-scope-only steps, report with reproduction steps |
+| **Responsible Disclosure** | Curate findings, draft a disclosure report + email, detect the target's security.txt, prepare (never auto-send) and record submissions |
 | **Projects** | Create/manage engagements, stored in a local SQLite database |
 | **Assets & Scope** | Inventory hosts/URLs, mark in-scope vs. out-of-scope |
 | **Tool Launcher** | Auto-detects installed Kali tools; builds & launches commands |
@@ -27,8 +45,71 @@ services**.
 | **Evidence** | Attach screenshots, files, and notes to findings |
 | **Findings & Reporting** | Severity, CVSS, remediation, references → HTML/PDF/Markdown |
 | **Assistant** | Offline knowledge base: explains tools, suggests next steps, drafts commands |
-| **Automation** | Repeatable recon / enum / vuln / web-app workflows |
 | **Plugins** | Drop-in modules add new tabs, tools, or report sections |
+
+### AI Workflow (natural language → safe execution)
+
+Type a goal such as *"Identify the IP address and open ports of my website
+example.com"*. The assistant then:
+
+1. Analyzes the request and **refuses** anything harmful (phishing, malware,
+   ransomware, credential theft, DoS).
+2. Resolves the target and proposes an **ordered plan** of Kali tools, each with
+   a rationale and the exact command — built from vetted templates, never from
+   raw model text.
+3. Waits for you to **approve** the specific steps (checkbox per step).
+4. Runs approved steps in the **background**, streaming live output.
+5. **Highlights findings** (open ports, services, discovered paths, reported
+   issues) in a dashboard.
+6. **Explains** each step and the overall result in plain English.
+7. Persists every executed command and its output for **audit**.
+
+Planning and explanation use a **local LLM (Ollama)** when one is running on
+`localhost`; if none is available the app falls back to deterministic rules and
+remains fully functional offline.
+
+### Responsible Disclosure & Reporting
+
+After an authorized assessment, the Disclosure tab helps you disclose findings
+responsibly — with a human in control at every step:
+
+1. **Curate** — deduplicate findings, rank by severity then confidence, and flag
+   items still marked *Tentative* (requiring manual verification).
+2. **Draft report** — an editable disclosure report with Executive Summary,
+   Scope, Methodology, Technical Findings, CVSS, Business Impact, Evidence,
+   Reproduction Steps, Remediation, References, and a Timeline of Assessment.
+3. **Detect the security contact** — parse or fetch the target's RFC 9116
+   `security.txt` and auto-fill the recipient.
+4. **Draft a professional, vendor-friendly email** (LLM-refined if available).
+5. **Approve & prepare** — on explicit approval the app saves the report and an
+   `.eml` draft and opens your mail client. **It never sends anything itself** —
+   you deliver it through the organization's published process and confirm.
+6. **Record** every submission (version, recipient, status, date) locally.
+
+Safety: disclosure is refused for unauthorized or out-of-scope targets, and no
+finding is ever fabricated — each carries a confidence level and evidence.
+
+### AI Bug Bounty Assistant
+
+A dedicated tab for authorized bug bounty work, fully integrated with the shared
+project database, workflow engine, and reporting:
+
+1. **Import & validate scope** — paste an engagement's in-scope / out-of-scope
+   rules (hostnames, `*.wildcards`, IPs, CIDRs). Entries are saved as project
+   assets; rules are stored on the project.
+2. **Scope is a hard gate** — the planner refuses any target that is out of scope
+   or not listed; out-of-scope rules always win.
+3. **Target-type methodology** — pick Web / API / Mobile backend / Desktop /
+   Network and get a tailored recon → enumeration → assessment chain.
+4. **Approve & run** on the same background engine, with findings highlighted.
+5. **Correlate & triage** — tool output is classified into candidate issues with
+   suggested CVSS severity, flagged for verification; review them and promote the
+   real ones into the project's Findings (which then flow into the report).
+6. **Recommend next step** — the assistant suggests the next methodology phase
+   based on what has already run and the scope.
+7. **Bug bounty report** — Executive summary, Scope, Methodology, Findings
+   (severity / CVSS / evidence), **reproduction steps**, remediation, and
+   references, exported to HTML / PDF / Markdown.
 
 ## Architecture
 
@@ -36,8 +117,11 @@ services**.
 securityops/
 ├── core/          Config, logging, SQLite database, threading, plugin & tool managers
 ├── models/        Typed dataclasses for Project, Asset, Scan, Finding, Evidence
-├── plugins/       Built-in feature plugins (tool launcher, scans, reporting, ...)
-├── ai/            Offline knowledge-base assistant (no network calls)
+├── workflow/      AI workflow: plan model, NL planner, output parsers, engine, explainer
+├── bugbounty/     Scope import/validation, methodology, planner, triage, report
+├── disclosure/    Finding curation, security.txt, disclosure email & report
+├── plugins/       Built-in feature plugins (AI workflow, bug bounty, disclosure, tools, ...)
+├── ai/            Offline knowledge-base assistant + local LLM client (no cloud calls)
 ├── reporting/     Jinja2 → HTML/PDF/Markdown report generator
 ├── gui/           PySide6 dark-themed main window and widgets
 ├── config/        Default YAML configuration
@@ -57,9 +141,21 @@ registration API. This keeps the codebase modular and testable.
 
 ## Installation
 
+**Kali Linux (recommended, incl. inside a VirtualBox VM):** run the installer,
+which installs required system/Qt libraries via `apt`, creates a `.venv/`, and
+installs Python dependencies:
+
 ```bash
-cd securityops
-python -m venv .venv
+git clone https://github.com/niyant07/SecurityOps-Assistant.git
+cd SecurityOps-Assistant
+./scripts/install.sh          # installs everything
+./scripts/install.sh --run    # installs, then launches the app immediately
+```
+
+**Manual / other platforms:**
+
+```bash
+python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -r requirements.txt
 # or: python -m pip install -e ".[dev]"
@@ -74,6 +170,22 @@ python -m securityops
 On first launch the app creates its data directory at
 `~/.local/share/securityops/` (database, logs, evidence) and a config file at
 `~/.config/securityops/config.yaml`.
+
+### Optional: local LLM for the AI Workflow tab
+
+The AI Workflow tab works out of the box using deterministic rules. For more
+fluent planning and explanations, run a **local** [Ollama](https://ollama.com)
+model — no data leaves your machine:
+
+```bash
+# install Ollama (see ollama.com), then:
+ollama pull llama3
+ollama serve      # usually already running as a service
+```
+
+The app auto-detects Ollama on `localhost:11434`. Change the model/host under
+the `llm:` section of `config.yaml`, or set `llm.enabled: false` to force
+rules-only mode.
 
 ## Testing
 
@@ -90,13 +202,29 @@ Configuration is loaded from, in order of precedence:
 
 Environment variable `SECURITYOPS_CONFIG` may point to an alternate file.
 
+## Database & migrations
+
+The SQLite database is created and versioned automatically (`PRAGMA
+user_version`). On startup the app applies any pending schema migrations in
+place, so **existing databases are upgraded automatically on first launch** —
+no manual steps and no data loss. For example, upgrading to the Bug Bounty
+release migrates the database from schema v1 to v2 (adding a `reproduction`
+column to findings) the first time you open an older project. Migrations are
+incremental and forward-only; back up your data directory before upgrading if
+you want a rollback point.
+
 ## Security & Privacy
 
-- No telemetry, no network requests, no cloud APIs.
+- No telemetry, no cloud APIs. The only network calls are (a) to a **local**
+  LLM on `localhost` if you enable one, and (b) to the targets you choose to
+  assess.
 - All data stays in your local data directory.
-- The assistant is a static, offline knowledge base — it does not call any LLM.
-- Tools are only launched when you explicitly click **Launch**; commands are
-  shown for review first.
+- The AI planner **refuses** harmful objectives and never executes a step
+  without explicit per-step approval; commands are built from vetted templates,
+  not from raw model output.
+- Every executed command and its output is persisted for audit.
+- Tools are only launched when you explicitly approve/launch them; commands are
+  always shown for review first.
 
 ## License
 
