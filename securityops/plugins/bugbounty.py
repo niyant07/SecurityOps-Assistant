@@ -480,7 +480,7 @@ class BugBountyWidget(QWidget):
         )
         stamp = datetime.now().strftime("%Y%m%d_%H%M")
         safe = "".join(c if c.isalnum() else "_" for c in (self._scope.program or project.name))
-        default = str(paths.reports_dir() / f"bugbounty_{safe}_{stamp}.html")
+        default = str(paths.downloads_dir() / f"bugbounty_{safe}_{stamp}.html")
         path, _ = QFileDialog.getSaveFileName(self, "Export bug bounty report", default)
         if not path:
             return

@@ -291,7 +291,7 @@ class DisclosureWidget(QWidget):
             return
         stamp = datetime.now().strftime("%Y%m%d_%H%M")
         safe = "".join(c if c.isalnum() else "_" for c in bundle.target)
-        default = str(paths.reports_dir() / f"disclosure_{safe}_{bundle.report_version}_{stamp}.html")
+        default = str(paths.downloads_dir() / f"disclosure_{safe}_{bundle.report_version}_{stamp}.html")
         path, _ = QFileDialog.getSaveFileName(self, "Save disclosure report", default)
         if not path:
             return

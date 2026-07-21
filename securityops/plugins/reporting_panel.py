@@ -45,14 +45,19 @@ class ReportingWidget(QWidget):
         self._format.addItem("PDF (requires WeasyPrint)", ReportFormat.PDF)
         preview_btn = QPushButton("Preview (HTML)")
         preview_btn.clicked.connect(self._preview)
-        export_btn = QPushButton("Export…")
-        export_btn.setObjectName("primary")
+        download_btn = QPushButton("⬇ Download to Downloads")
+        download_btn.setObjectName("primary")
+        download_btn.setToolTip("Save the report straight to your Downloads folder")
+        download_btn.clicked.connect(self._download)
+        export_btn = QPushButton("Save as…")
+        export_btn.setToolTip("Choose where to save the report")
         export_btn.clicked.connect(self._export)
         row.addWidget(QLabel("Format:"))
         row.addWidget(self._format)
         row.addStretch()
         row.addWidget(preview_btn)
         row.addWidget(export_btn)
+        row.addWidget(download_btn)
         layout.addLayout(row)
 
         self._preview_area = QPlainTextEdit()
@@ -90,26 +95,44 @@ class ReportingWidget(QWidget):
         html = self._generator.render_html(bundle, evidence_root=paths.evidence_dir())
         self._preview_area.setPlainText(html)
 
-    def _export(self) -> None:
+    def _filename(self, bundle: ReportBundle, fmt: ReportFormat) -> str:
+        stamp = datetime.now().strftime("%Y%m%d_%H%M")
+        safe_name = "".join(c if c.isalnum() else "_" for c in bundle.project.name)
+        return f"{safe_name}_{stamp}.{fmt.value}"
+
+    def _download(self) -> None:
+        """One-click export straight into the user's Downloads folder."""
         bundle = self._bundle()
         if bundle is None:
             return
         fmt: ReportFormat = self._format.currentData()
-        stamp = datetime.now().strftime("%Y%m%d_%H%M")
-        safe_name = "".join(c if c.isalnum() else "_" for c in bundle.project.name)
-        default = str(paths.reports_dir() / f"{safe_name}_{stamp}.{fmt.value}")
-        path, _ = QFileDialog.getSaveFileName(self, "Export report", default)
+        target = paths.downloads_dir() / self._filename(bundle, fmt)
+        try:
+            written = self._generator.export(
+                bundle, target, fmt, evidence_root=paths.evidence_dir())
+        except RuntimeError as exc:  # e.g. WeasyPrint missing
+            widgets.warn(self, "Download failed", str(exc))
+            return
+        widgets.info(self, "Report downloaded", f"Saved to your Downloads folder:\n{written}")
+
+    def _export(self) -> None:
+        from pathlib import Path
+
+        bundle = self._bundle()
+        if bundle is None:
+            return
+        fmt: ReportFormat = self._format.currentData()
+        default = str(paths.downloads_dir() / self._filename(bundle, fmt))
+        path, _ = QFileDialog.getSaveFileName(self, "Save report", default)
         if not path:
             return
         try:
             written = self._generator.export(
-                bundle, __import__("pathlib").Path(path), fmt,
-                evidence_root=paths.evidence_dir(),
-            )
+                bundle, Path(path), fmt, evidence_root=paths.evidence_dir())
         except RuntimeError as exc:  # e.g. WeasyPrint missing
             widgets.warn(self, "Export failed", str(exc))
             return
-        widgets.info(self, "Report exported", f"Saved to:\n{written}")
+        widgets.info(self, "Report saved", f"Saved to:\n{written}")
 
 
 class ReportingPlugin(PluginBase):
