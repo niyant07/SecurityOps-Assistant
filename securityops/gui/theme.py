@@ -71,19 +71,37 @@ QPushButton#primary {{
     font-weight: 600;
 }}
 QPushButton#primary:hover {{ background-color: {_DARK['accent_hover']}; }}
+QPushButton#danger {{ color: #f0a5a0; }}
+QPushButton#danger:hover {{ border-color: #f85149; color: #ff8a80; }}
 QPushButton:disabled {{ color: {_DARK['muted']}; border-color: {_DARK['surface2']}; }}
+
+QToolTip {{
+    background-color: {_DARK['surface2']};
+    color: {_DARK['text']};
+    border: 1px solid {_DARK['accent']};
+    border-radius: 4px;
+    padding: 5px 8px;
+}}
 
 QLineEdit, QTextEdit, QPlainTextEdit, QComboBox, QSpinBox, QDoubleSpinBox {{
     background-color: {_DARK['surface']};
     border: 1px solid {_DARK['border']};
     border-radius: 6px;
-    padding: 5px 8px;
+    padding: 6px 9px;
     selection-background-color: {_DARK['accent']};
 }}
 QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus, QComboBox:focus {{
     border-color: {_DARK['accent']};
 }}
-QComboBox::drop-down {{ border: none; width: 20px; }}
+QLineEdit::placeholder {{ color: {_DARK['muted']}; }}
+QComboBox::drop-down {{ border: none; width: 22px; }}
+QComboBox QAbstractItemView {{
+    background-color: {_DARK['surface']};
+    border: 1px solid {_DARK['border']};
+    selection-background-color: {_DARK['accent']};
+    selection-color: white;
+    padding: 4px;
+}}
 
 QTableView, QTableWidget, QTreeWidget, QListWidget {{
     background-color: {_DARK['surface']};

@@ -14,6 +14,21 @@ services**.
 > exploitation or attacks on its own — it organizes work and launches
 > operator-approved tools.
 
+## Objective
+
+To design and develop a **local-first, AI-assisted desktop platform** that
+converts an analyst's plain-English objective into a **safe, approval-gated**
+cybersecurity assessment workflow, and carries it through execution, evidence
+collection, and professional reporting — **entirely offline**, for authorized
+security testing only.
+
+Supporting goals: interpret natural-language goals into reviewable plans; enforce
+safety by design (approval gates, scope validation, refusal of harmful requests);
+auto-detect and coordinate Kali tools from one interface; correlate output into
+ranked, evidence-backed findings with CVSS and confidence; and generate
+assessment and responsible-disclosure reports — all with a local AI model that
+keeps data private.
+
 ---
 
 ## Features
