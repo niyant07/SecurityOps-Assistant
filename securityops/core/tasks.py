@@ -14,7 +14,6 @@ mid-flight.
 
 from __future__ import annotations
 
-import subprocess
 import traceback
 from typing import Any, Callable, Sequence
 
@@ -54,7 +53,7 @@ class Worker(QRunnable):
 
     @Slot()
     def run(self) -> None:  # noqa: D401 - Qt entry point
-        self.signals.started.emit()
+        self._emit(self.signals.started)
         try:
             code = getattr(self._fn, "__code__", None)
             if code is not None and "progress_callback" in code.co_varnames:
@@ -62,11 +61,25 @@ class Worker(QRunnable):
             outcome = self._fn(*self._args, **self._kwargs)
         except Exception as exc:  # noqa: BLE001 - report all failures to the UI
             _LOG.exception("Worker failed: %s", exc)
-            self.signals.error.emit(f"{exc}\n{traceback.format_exc()}")
+            self._emit(self.signals.error, f"{exc}\n{traceback.format_exc()}")
         else:
-            self.signals.result.emit(outcome)
+            self._emit(self.signals.result, outcome)
         finally:
-            self.signals.finished.emit()
+            self._emit(self.signals.finished)
+
+    def _emit(self, signal: Any, *args: Any) -> None:
+        """Emit *signal*, tolerating the receiver having been torn down.
+
+        Runs on a QThreadPool worker thread: if the owning widget/window was
+        already destroyed (e.g. the app is shutting down while this task was
+        still in flight), the underlying Qt object is gone and emitting raises
+        RuntimeError. That is expected in a shutdown race, not a real failure —
+        there is nothing left listening, so it is safe to drop the signal.
+        """
+        try:
+            signal.emit(*args)
+        except RuntimeError:
+            _LOG.debug("Dropped signal emit after receiver was destroyed")
 
 
 # --------------------------------------------------------------------------- #
@@ -173,4 +186,20 @@ class TaskManager:
             runner.cancel()
 
     def active_count(self) -> int:
+        """Total QThreadPool activity, including short-lived helper tasks
+
+        (LLM probes, AI explanations, etc. submitted via :meth:`submit`). Not a
+        reliable signal for "should the user be warned before quitting" — use
+        :meth:`has_running_commands` for that.
+        """
         return self._pool.activeThreadCount()
+
+    def has_running_commands(self) -> bool:
+        """True if a real, user-launched external tool process is still running.
+
+        Unlike :meth:`active_count`, this ignores incidental background helper
+        tasks (LLM connectivity probes, AI explanation generation) so a quit
+        confirmation only fires for work the user would recognize and want to
+        avoid losing.
+        """
+        return any(runner.is_running() for runner in self._runners)

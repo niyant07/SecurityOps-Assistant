@@ -21,7 +21,7 @@ from dataclasses import dataclass
 
 from ..core.logging_config import get_logger
 from ..core.tools import MissingParameterError, ToolRegistry
-from .plan import StepStatus, WorkflowPlan, WorkflowStep
+from .plan import WorkflowPlan, WorkflowStep
 
 _LOG = get_logger("workflow.planner")
 

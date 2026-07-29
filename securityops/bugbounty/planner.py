@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from ..core.logging_config import get_logger
 from ..core.tools import ToolRegistry
-from ..workflow.plan import StepStatus, WorkflowPlan
+from ..workflow.plan import WorkflowPlan
 from ..workflow.planner import RuleBasedPlanner, _harmful_reason, extract_target
 from .methodology import methodology_for, tool_chain_for
 from .scope import Scope, ScopeValidator

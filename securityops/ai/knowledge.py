@@ -6,7 +6,7 @@ templates keyed by topic, and reference links. No network access.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 
 @dataclass(frozen=True)

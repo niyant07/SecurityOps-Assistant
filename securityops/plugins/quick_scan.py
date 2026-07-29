@@ -22,8 +22,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QTextCursor
+from PySide6.QtGui import QColor, QTextCursor
 from PySide6.QtWidgets import (
     QCheckBox,
     QHBoxLayout,
@@ -302,7 +301,7 @@ class QuickScanWidget(QWidget):
             item_text = f"[{c.severity.value}] {c.title}"
             self._findings_list.addItem(item_text)
             last = self._findings_list.item(self._findings_list.count() - 1)
-            last.setForeground(Qt.GlobalColor.white)
+            last.setForeground(QColor(color))
             last.setToolTip(c.description)
         self._findings_list.setVisible(bool(candidates))
         self._download_btn.setVisible(True)

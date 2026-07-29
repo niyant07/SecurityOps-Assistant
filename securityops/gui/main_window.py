@@ -313,7 +313,7 @@ class MainWindow(QMainWindow):
             "Use only against systems you own or are permitted to test.")
 
     def closeEvent(self, event) -> None:  # noqa: N802 - Qt signature
-        if self._ctx.tasks.active_count() > 0:
+        if self._ctx.tasks.has_running_commands():
             reply = QMessageBox.question(
                 self, "Quit while tasks are running?",
                 "A task is still running. Quit and stop it?",
