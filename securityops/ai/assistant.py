@@ -219,22 +219,29 @@ class Assistant:
                 return spec
         return None
 
+    # Keyword -> substring that identifies the target phase by name, rather than
+    # a fragile positional index into knowledge.PHASES.
+    _PHASE_KEYWORDS = (
+        ("recon", "reconnaissance"),
+        ("enum", "enumeration"),
+        ("web", "web application"),
+        ("vuln", "vulnerability"),
+        ("wireless", "wireless"),
+        ("wifi", "wireless"),
+        ("exploit", "exploitation"),
+        ("report", "reporting"),
+    )
+
     def _match_phase(self, text: str) -> knowledge.Phase | None:
         low = text.lower()
         for phase in knowledge.PHASES:
             if phase.name.lower() in low:
                 return phase
-        keyword_map = {
-            "recon": knowledge.PHASES[0],
-            "enum": knowledge.PHASES[1],
-            "web": knowledge.PHASES[2],
-            "vuln": knowledge.PHASES[3],
-            "exploit": knowledge.PHASES[4],
-            "report": knowledge.PHASES[5],
-        }
-        for kw, phase in keyword_map.items():
+        for kw, name_part in self._PHASE_KEYWORDS:
             if kw in low:
-                return phase
+                match = next((p for p in knowledge.PHASES if name_part in p.name.lower()), None)
+                if match:
+                    return match
         return None
 
     @staticmethod

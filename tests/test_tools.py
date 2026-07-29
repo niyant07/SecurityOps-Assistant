@@ -57,3 +57,22 @@ def test_unknown_tool_raises_keyerror() -> None:
 def test_split_command_no_shell() -> None:
     argv = ToolRegistry.split_command('nmap -sV "10.0.0.5"')
     assert argv == ["nmap", "-sV", "10.0.0.5"]
+
+
+def test_wireless_suite_present_and_launch_only() -> None:
+    for key in ("airmon", "airodump", "aireplay", "aircrack"):
+        spec = CATALOG_BY_KEY[key]
+        assert spec.interactive, f"{key} must be launch-only, never auto-executed"
+        assert spec.category.value == "Wireless"
+
+
+def test_aireplay_command_requires_bssid_and_count() -> None:
+    registry = ToolRegistry()
+    for detected in registry.all():
+        detected.path = f"/usr/bin/{detected.spec.binary}"
+    with pytest.raises(MissingParameterError):
+        registry.build_command("aireplay", "wlan0mon")  # missing count/bssid
+    command = registry.build_command(
+        "aireplay", "wlan0mon", {"count": "5", "bssid": "AA:BB:CC:DD:EE:FF"})
+    assert "--deauth 5" in command
+    assert "AA:BB:CC:DD:EE:FF" in command

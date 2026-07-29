@@ -247,6 +247,13 @@ you want a rollback point.
 - Every executed command and its output is persisted for audit.
 - Tools are only launched when you explicitly approve/launch them; commands are
   always shown for review first.
+- **Wireless auditing is manual-only, never automated.** The aircrack-ng suite
+  (`airmon-ng`/`airodump-ng`/`aireplay-ng`/`aircrack-ng`) is available in the
+  Tool Launcher for authorized WiFi security testing, but is structurally
+  excluded from the AI Workflow's automatic planner — no goal text can make the
+  assistant run a wireless attack for you. Deauthentication affects every
+  client on the target access point, not just yours; only run these tools
+  against a network you own or have explicit written authorization to test.
 
 ## License
 
