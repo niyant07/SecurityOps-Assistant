@@ -36,6 +36,7 @@ _LOG = get_logger("gui.main")
 # A short, plain-language hint shown per tab (falls back to the plugin's own
 # description). Keys are plugin identifiers.
 _TAB_HINTS = {
+    "quick_scan": "Paste a link, confirm you're authorized, and get a vulnerability report.",
     "workflow_chat": "Describe a goal in plain English → review a plan → run it safely.",
     "bugbounty": "Import an engagement scope and run an in-scope-only assessment.",
     "disclosure": "Turn findings into a report and prepare a responsible disclosure.",
@@ -175,6 +176,18 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------ #
     # Project handling
     # ------------------------------------------------------------------ #
+    def refresh_projects(self, select_project_id: int | None = None) -> None:
+        """Public hook plugins can call (via ``self.window()``) after they
+
+        create or modify a project directly, so the toolbar selector and all
+        other tabs stay in sync.
+        """
+        self._reload_projects()
+        if select_project_id is not None:
+            index = self._project_combo.findData(select_project_id)
+            if index >= 0:
+                self._project_combo.setCurrentIndex(index)
+
     def _reload_projects(self) -> None:
         self._project_combo.blockSignals(True)
         self._project_combo.clear()

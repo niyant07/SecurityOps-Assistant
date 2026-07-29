@@ -35,6 +35,7 @@ keeps data private.
 
 | Area | Capability |
 |------|-----------|
+| **Quick Scan** | Paste a link → confirm authorization → one click → vulnerability report, downloaded automatically |
 | **AI Workflow** | Plain-English goal → reviewable plan → approve → background run → findings → plain-English explanation |
 | **AI Bug Bounty** | Import & validate engagement scope, build a target-type methodology, run in-scope-only steps, report with reproduction steps |
 | **Responsible Disclosure** | Curate findings, draft a disclosure report + email, detect the target's security.txt, prepare (never auto-send) and record submissions |
@@ -46,6 +47,27 @@ keeps data private.
 | **Findings & Reporting** | Severity, CVSS, remediation, references → HTML/PDF/Markdown |
 | **Assistant** | Offline knowledge base: explains tools, suggests next steps, drafts commands |
 | **Plugins** | Drop-in modules add new tabs, tools, or report sections |
+
+### Quick Scan (the fastest way to check a link)
+
+The **Quick Scan** tab is the friendliest entry point — no need to understand
+projects, plans, or tabs first:
+
+1. Paste a link or host (`https://example.com`, `example.com`, `10.0.0.5`).
+2. Tick **"I own this / have permission to test it."** — required; the scan
+   button stays disabled until you do.
+3. Click **Scan Now**. You still see the exact commands and confirm once before
+   anything runs — the default scan is always conservative (recon +
+   enumeration + a non-destructive vulnerability check; brute-force/injection
+   tools are never included unless you explicitly ask for them elsewhere).
+4. Watch live progress, then review the flagged findings.
+5. Click **Download Report** — saved straight to your **Downloads** folder,
+   no dialog.
+
+If no project is active, one is created automatically for the target so a
+first-time user never has to deal with project setup. Everything still goes
+through the same scope-safe planner, background engine, correlation/triage,
+and report generator as the rest of the app.
 
 ### AI Workflow (natural language → safe execution)
 
