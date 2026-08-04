@@ -13,7 +13,7 @@ to enrich descriptions, but severity and classification never depend on it.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from ..models import Confidence, Finding, Severity
 

@@ -14,7 +14,7 @@ from pathlib import Path
 
 from ..models import Asset, Evidence, Finding, Project, Scan
 from ..reporting.generator import ReportFormat, ReportGenerator
-from .curate import CuratedFindings, curate_findings
+from .curate import curate_findings
 
 
 @dataclass

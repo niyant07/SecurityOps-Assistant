@@ -56,6 +56,18 @@ installed tools with `shutil.which` (+ config `extra_paths`) and renders
 templates into **review-only** command strings. Commands are split with
 `shlex.split` and executed via `QProcess` — **never** through a shell.
 
+**Interactive/launch-only tools** (`ToolSpec.interactive=True`) — Burp Suite,
+Wireshark, Metasploit console, Hashcat, Hydra, John the Ripper, and the
+aircrack-ng suite (`airmon-ng`, `airodump-ng`, `aireplay-ng`, `aircrack-ng`) —
+are discoverable and launchable from the Tool Launcher tab, but are structurally
+excluded from the AI Workflow's automated planner via `workflow.planner._MANUAL_ONLY`,
+regardless of the goal text. This is deliberate, not an oversight: these tools
+either require credentials/wordlists/capture files only the operator has, or (in
+the wireless case) are active attacks with a blast radius beyond the declared
+target — deauthentication disconnects every client on the access point, not just
+a test device. No automated command-selection logic is permitted to reach them;
+the operator must open the terminal and drive each step themselves.
+
 ### `core.plugins`
 `PluginManager` discovers modules in `securityops.plugins` that expose either a
 `PLUGIN` class or a `get_plugin(context)` factory, orders them by

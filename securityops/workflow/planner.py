@@ -21,7 +21,7 @@ from dataclasses import dataclass
 
 from ..core.logging_config import get_logger
 from ..core.tools import MissingParameterError, ToolRegistry
-from .plan import StepStatus, WorkflowPlan, WorkflowStep
+from .plan import WorkflowPlan, WorkflowStep
 
 _LOG = get_logger("workflow.planner")
 
@@ -29,8 +29,11 @@ _LOG = get_logger("workflow.planner")
 _DEFAULT_WORDLIST = "/usr/share/wordlists/dirb/common.txt"
 
 # Tools that are interactive/manual and must not be auto-run in a workflow.
+# Wireless tools in particular can disrupt every client on a target access
+# point (deauthentication), so they are never eligible for automatic planning
+# regardless of the goal text — the operator must launch and drive them by hand.
 _MANUAL_ONLY = {"burpsuite", "wireshark", "metasploit", "hashcat", "hydra",
-                "john", "aircrack"}
+                "john", "aircrack", "airmon", "airodump", "aireplay"}
 
 # Steps built from these tools carry a disruptive-operation warning.
 _DISRUPTIVE = {

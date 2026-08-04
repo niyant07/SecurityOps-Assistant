@@ -6,7 +6,7 @@ templates keyed by topic, and reference links. No network access.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
@@ -50,6 +50,17 @@ PHASES: tuple[Phase, ...] = (
         "Confirm impact of validated vulnerabilities.",
         ("metasploit", "hydra", "hashcat", "john"),
         "Launch consoles for manual use. Never run automated exploitation blindly.",
+    ),
+    Phase(
+        "Wireless Assessment (manual, authorized)",
+        "Audit the security of a WiFi network you own or are authorized to test.",
+        ("airmon", "airodump", "aireplay", "aircrack"),
+        "Standard order: airmon-ng (monitor mode) -> airodump-ng (capture a "
+        "handshake) -> aireplay-ng (optional deauth to force one) -> aircrack-ng "
+        "(crack the captured handshake against a wordlist). Deauthentication "
+        "affects every client on the target access point — only run this "
+        "against your own network or one you have explicit written authorization "
+        "to test, and never against a network you don't control.",
     ),
     Phase(
         "Reporting",

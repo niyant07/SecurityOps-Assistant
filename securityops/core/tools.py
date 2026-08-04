@@ -165,9 +165,37 @@ CATALOG: tuple[ToolSpec, ...] = (
     ),
     ToolSpec(
         "aircrack", "Aircrack-ng", "aircrack-ng", ToolCategory.WIRELESS,
-        "Wireless WEP/WPA key recovery suite.",
-        template="{binary} {capturefile}", interactive=True,
+        "Cracks a captured WEP/WPA handshake against a wordlist.",
+        template="{binary} {capturefile} -w {wordlist}", interactive=True,
+        notes="Final step of the aircrack-ng suite. Only use on a handshake you "
+              "captured from a network you own or are explicitly authorized to test.",
         aliases=("aircrack-ng",),
+    ),
+    ToolSpec(
+        "airmon", "Airmon-ng", "airmon-ng", ToolCategory.WIRELESS,
+        "Enables monitor mode on a wireless interface (step 1 of a WiFi audit).",
+        template="{binary} start {target}", interactive=True,
+        notes="target = wireless interface, e.g. wlan0. Creates a monitor-mode "
+              "interface (e.g. wlan0mon) used by airodump-ng/aireplay-ng.",
+        aliases=("airmon-ng",),
+    ),
+    ToolSpec(
+        "airodump", "Airodump-ng", "airodump-ng", ToolCategory.WIRELESS,
+        "Captures wireless traffic and WPA handshakes on a channel (step 2).",
+        template="{binary} {target}", interactive=True,
+        notes="target = monitor-mode interface, e.g. wlan0mon. Add -c <channel> "
+              "--bssid <AP MAC> -w <output-prefix> manually to focus on one "
+              "authorized access point.",
+        aliases=("airodump-ng",),
+    ),
+    ToolSpec(
+        "aireplay", "Aireplay-ng", "aireplay-ng", ToolCategory.WIRELESS,
+        "Sends deauthentication frames to force a handshake capture (optional step 3).",
+        template="{binary} --deauth {count} -a {bssid} {target}", interactive=True,
+        notes="⚠ Deauthenticates ALL clients on the target access point, not just "
+              "your own device — only run against an AP you own or have explicit "
+              "written authorization to test, and be aware of who else it disrupts.",
+        aliases=("aireplay-ng",),
     ),
 )
 
