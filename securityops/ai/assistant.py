@@ -18,6 +18,10 @@ from ..models import Finding, Severity
 from . import knowledge
 
 
+from .llm import LocalLLM
+from .rag import RAGEngine
+
+
 @dataclass
 class AssistantReply:
     """A structured reply from the assistant."""
@@ -27,10 +31,12 @@ class AssistantReply:
     suggested_command: str | None = None
     #: Optional list of follow-up suggestions.
     suggestions: list[str] = field(default_factory=list)
+    #: Optional list of cited knowledge sources (RAG mode).
+    citations: list[str] = field(default_factory=list)
 
 
 class Assistant:
-    """Deterministic, offline advisory assistant."""
+    """Deterministic, offline advisory assistant with local RAG capabilities."""
 
     #: Actions the assistant will always refuse to perform automatically.
     REFUSAL = (
@@ -39,10 +45,20 @@ class Assistant:
         "and only against assets you're authorized to test."
     )
 
-    def __init__(self, tools: ToolRegistry | None = None) -> None:
+    def __init__(
+        self,
+        tools: ToolRegistry | None = None,
+        llm: LocalLLM | None = None,
+        rag_engine: RAGEngine | None = None,
+    ) -> None:
         self._tools = tools
+        self._llm = llm
+        self._rag = rag_engine or RAGEngine(llm=llm)
+
         # Intent handlers are tried in order; first matching pattern wins.
         self._routes: list[tuple[re.Pattern[str], Callable[[str], AssistantReply]]] = [
+            (re.compile(r"\b(exploit\w*|hack\w*|attack\w*|ddos|malware|ransom\w*)\b", re.I),
+             self._safety_gate),
             (re.compile(r"\b(explain|what is|what does|describe|tell me about)\b", re.I),
              self._explain_tool),
             (re.compile(r"\b(next|recommend|which tool|what should|suggest)\b", re.I),
@@ -55,22 +71,52 @@ class Assistant:
              self._severity_help),
             (re.compile(r"\b(workflow|phase|methodology|process|steps)\b", re.I),
              self._workflow),
-            (re.compile(r"\b(exploit\w*|hack\w*|attack\w*|ddos|malware|ransom\w*)\b", re.I),
-             self._safety_gate),
         ]
+
+    @property
+    def rag_engine(self) -> RAGEngine:
+        return self._rag
 
     # ------------------------------------------------------------------ #
     # Public API
     # ------------------------------------------------------------------ #
-    def ask(self, question: str) -> AssistantReply:
-        """Route *question* to a handler and return a reply."""
+    def ask(self, question: str, use_rag: bool = True) -> AssistantReply:
+        """Route *question* to a handler or RAG engine and return a reply."""
         text = question.strip()
         if not text:
             return AssistantReply("Ask me to explain a tool, recommend a next step, "
                                   "generate a command, or draft remediation.")
+
+        # Always enforce safety refusal gate first
+        if re.search(r"\b(exploit\w*|hack\w*|attack\w*|ddos|malware|ransom\w*)\b", text, re.I):
+            return self._safety_gate(text)
+
+        # Check deterministic intent routes first, attaching RAG citations
         for pattern, handler in self._routes:
             if pattern.search(text):
-                return handler(text)
+                reply = handler(text)
+                if use_rag and self._rag:
+                    try:
+                        results = self._rag.retrieve(text, top_k=2)
+                        if results:
+                            reply.citations = [doc.source for doc, _ in results]
+                    except Exception:
+                        pass
+                return reply
+
+        # Use RAG retrieval for general queries when no specific intent route matched
+        if use_rag and self._rag:
+            try:
+                text_out, citations, cmd = self._rag.generate_rag_response(text)
+                if text_out and citations:
+                    return AssistantReply(
+                        text=text_out,
+                        suggested_command=cmd,
+                        citations=citations,
+                    )
+            except Exception:
+                pass
+
         return self._fallback(text)
 
     def explain_tool(self, key: str) -> str:

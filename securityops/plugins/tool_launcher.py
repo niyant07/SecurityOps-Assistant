@@ -255,9 +255,25 @@ class ToolLauncherWidget(QWidget):
         self._runner.failed.connect(lambda msg: self._on_failed(msg, scan))
 
     def _launch_in_terminal(self, command: str) -> None:
+        import shutil
+        import sys
+
         term = self._ctx.config.get("tools.terminal", {}) or {}
         program = str(term.get("program", "x-terminal-emulator"))
-        args = [str(a).replace("{cmd}", command) for a in term.get("args", ["-e", command])]
+        args_template = term.get("args", ["-e", command])
+
+        if sys.platform == "win32" and not shutil.which(program):
+            if shutil.which("cmd.exe"):
+                program = "cmd.exe"
+                args = ["/c", f"start cmd /k {command}"]
+            elif shutil.which("powershell.exe"):
+                program = "powershell.exe"
+                args = ["-NoExit", "-Command", command]
+            else:
+                args = [str(a).replace("{cmd}", command) for a in args_template]
+        else:
+            args = [str(a).replace("{cmd}", command) for a in args_template]
+
         self._ctx.tasks.run_command(program, args)
 
     def _on_output(self, chunk: str, buffer: list[str]) -> None:

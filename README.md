@@ -174,13 +174,20 @@ cd SecurityOps-Assistant
 ./scripts/install.sh --run    # installs, then launches the app immediately
 ```
 
+**Windows (PowerShell):**
+
+```powershell
+git clone https://github.com/niyant07/SecurityOps-Assistant.git
+cd SecurityOps-Assistant
+.\scripts\install.ps1 -Run    # installs, then launches the app immediately
+```
+
 **Manual / other platforms:**
 
 ```bash
 python3 -m venv .venv
-source .venv/bin/activate
+source .venv/bin/activate    # On Windows: .\.venv\Scripts\activate
 python -m pip install -r requirements.txt
-# or: python -m pip install -e ".[dev]"
 ```
 
 ## Running

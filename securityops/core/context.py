@@ -32,6 +32,8 @@ class AppContext:
     # Optional local LLM client (securityops.ai.llm.LocalLLM); None when disabled
     # or unavailable. Kept as object to keep core free of ai imports.
     llm: object | None = field(default=None)
+    # Optional RAG Engine (securityops.ai.rag.RAGEngine) for local document retrieval.
+    rag: object | None = field(default=None)
 
     def set_active_project(self, project_id: int | None) -> None:
         self.active_project_id = project_id

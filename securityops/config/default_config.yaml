@@ -45,6 +45,13 @@ llm:
   host: "http://localhost:11434"
   model: "llama3"
 
+rag:
+  # 100% local RAG engine (Retrieval-Augmented Generation).
+  # Dynamically indexes security docs, tool manuals, remediation guides, and findings.
+  enabled: true
+  top_k: 3
+  embedding_model: "nomic-embed-text"
+
 reporting:
   author: "Security Analyst"
   company: "Your Organization"

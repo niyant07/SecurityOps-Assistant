@@ -242,8 +242,17 @@ class ToolRegistry:
 
     def _build_search_path(self) -> str | None:
         import os
+        import sys
 
         parts = [p for p in self._extra_paths if p]
+        if sys.platform == "win32":
+            win_paths = [
+                r"C:\Program Files\Nmap",
+                r"C:\Program Files (x86)\Nmap",
+                r"C:\ProgramData\chocolatey\bin",
+                r"C:\Tools",
+            ]
+            parts.extend([p for p in win_paths if os.path.isdir(p)])
         env_path = os.environ.get("PATH", "")
         if env_path:
             parts.append(env_path)

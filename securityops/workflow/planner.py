@@ -291,7 +291,7 @@ class RuleBasedPlanner:
 
 
 class LLMPlanner:
-    """LLM-assisted tool selection layered over the rule-based command builder."""
+    """LLM-assisted tool selection layered over the rule-based command builder with RAG augmentation."""
 
     _SYSTEM = (
         "You are a cybersecurity assessment planner. Given a user's goal, choose an "
@@ -301,9 +301,10 @@ class LLMPlanner:
         "allowed list."
     )
 
-    def __init__(self, llm, tools: ToolRegistry) -> None:  # noqa: ANN001
+    def __init__(self, llm, tools: ToolRegistry, rag_engine=None) -> None:  # noqa: ANN001
         self._llm = llm
         self._tools = tools
+        self._rag = rag_engine
         self._rules = RuleBasedPlanner(tools)
 
     def plan(self, goal: str) -> WorkflowPlan:
@@ -317,7 +318,18 @@ class LLMPlanner:
 
         allowed = [d.spec.key for d in self._tools.installed()
                    if d.spec.key not in _MANUAL_ONLY]
-        prompt = (f"ALLOWED tools: {allowed}\n\nUser goal: {goal}\n\n"
+
+        context_prompt = ""
+        if self._rag:
+            try:
+                results = self._rag.retrieve(goal, top_k=2)
+                if results:
+                    chunks_text = "\n".join(f"- {doc.title}: {doc.content[:150]}..." for doc, _ in results)
+                    context_prompt = f"\nRelevant Methodology Context:\n{chunks_text}\n"
+            except Exception:
+                pass
+
+        prompt = (f"ALLOWED tools: {allowed}\n{context_prompt}\nUser goal: {goal}\n\n"
                   "Return JSON with an ordered 'tools' list.")
         data = self._llm.generate_json(prompt, system=self._SYSTEM)
 
@@ -345,8 +357,8 @@ def _looks_web(goal: str) -> bool:
         r"\b(website|web app|web application|http|url|site|domain)\b", goal, re.I))
 
 
-def make_planner(tools: ToolRegistry, llm=None) -> RuleBasedPlanner | LLMPlanner:  # noqa: ANN001
+def make_planner(tools: ToolRegistry, llm=None, rag_engine=None) -> RuleBasedPlanner | LLMPlanner:  # noqa: ANN001
     """Return an LLM planner if a local model is configured, else the rule planner."""
     if llm is not None:
-        return LLMPlanner(llm, tools)
+        return LLMPlanner(llm, tools, rag_engine=rag_engine)
     return RuleBasedPlanner(tools)

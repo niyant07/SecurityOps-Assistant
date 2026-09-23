@@ -114,6 +114,30 @@ class LocalLLM:
             return None
         return _extract_json(raw)
 
+    def embed(self, text: str, model: str | None = None) -> list[float] | None:
+        """Return dense vector embedding for text using Ollama local embeddings API, or None on failure."""
+        target_model = model or self._cfg.model
+        body = {
+            "model": target_model,
+            "prompt": text,
+        }
+        data = json.dumps(body).encode("utf-8")
+        req = urllib.request.Request(
+            f"{self._cfg.host}/api/embeddings",
+            data=data,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=10.0) as resp:
+                payload = json.loads(resp.read().decode("utf-8"))
+                emb = payload.get("embedding")
+                if isinstance(emb, list) and all(isinstance(x, (int, float)) for x in emb):
+                    return [float(x) for x in emb]
+        except (urllib.error.URLError, OSError, ValueError) as exc:
+            _LOG.debug("LLM embedding generation failed (%s).", exc)
+        return None
+
 
 def _extract_json(text: str) -> object | None:
     """Best-effort extraction of a JSON object/array from model output."""

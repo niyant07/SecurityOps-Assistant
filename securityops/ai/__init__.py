@@ -8,5 +8,6 @@ a curated set of assessment-phase heuristics and remediation templates.
 from __future__ import annotations
 
 from .assistant import Assistant, AssistantReply
+from .rag import DocumentChunk, RAGEngine, VectorIndex
 
-__all__ = ["Assistant", "AssistantReply"]
+__all__ = ["Assistant", "AssistantReply", "DocumentChunk", "RAGEngine", "VectorIndex"]

@@ -79,7 +79,10 @@ class AssistantWidget(QWidget):
         body = reply.text
         if reply.suggested_command:
             body += f"\n\n<pre>{reply.suggested_command}</pre>"
-        self._append("Assistant", body, html=bool(reply.suggested_command))
+        if reply.citations:
+            sources_html = "<br/>".join(f"• <i>{c}</i>" for c in reply.citations)
+            body += f"<br/><br/><small><b>Sources (RAG):</b><br/>{sources_html}</small>"
+        self._append("Assistant", body, html=True)
 
     def _append(self, who: str, message: str, html: bool = False) -> None:
         color = "#2f81f7" if who == "You" else "#3fb950"
