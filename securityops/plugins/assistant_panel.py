@@ -72,8 +72,8 @@ class AssistantWidget(QWidget):
     def _ask(self, text: str) -> None:
         self._append("You", text)
         assistant = self._ctx.assistant
-        if assistant is None:
-            self._append("Assistant", "The assistant is disabled in configuration.")
+        if assistant is None or not hasattr(assistant, "ask"):
+            self._append("Assistant", "The assistant is disabled or unavailable.")
             return
         reply = assistant.ask(text)
         body = reply.text

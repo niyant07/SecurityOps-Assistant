@@ -469,7 +469,7 @@ class BugBountyWidget(QWidget):
             return
         findings = db.findings.list_for_project(project_id)
         summary = ""
-        if self._ctx.assistant is not None:
+        if self._ctx.assistant is not None and hasattr(self._ctx.assistant, "summarize_findings"):
             summary = self._ctx.assistant.summarize_findings(findings)
         bundle = BugBountyReportBundle(
             project=project, scope=self._scope, findings=findings,

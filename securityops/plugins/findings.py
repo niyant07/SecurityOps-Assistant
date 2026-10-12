@@ -223,8 +223,8 @@ class FindingsWidget(QWidget):
 
     def _suggest_remediation(self) -> None:
         assistant = self._ctx.assistant
-        if assistant is None:
-            widgets.warn(self, "Assistant unavailable", "The assistant is disabled.")
+        if assistant is None or not hasattr(assistant, "suggest_remediation"):
+            widgets.warn(self, "Assistant unavailable", "The assistant is disabled or unavailable.")
             return
         probe = Finding(
             project_id=self._ctx.active_project_id or 0,

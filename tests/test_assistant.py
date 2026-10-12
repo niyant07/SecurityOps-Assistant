@@ -47,3 +47,11 @@ def test_suggest_remediation_for_finding() -> None:
     finding = Finding(project_id=1, title="Reflected XSS in search", description="")
     advice = Assistant().suggest_remediation(finding)
     assert "encoding" in advice.lower() or "csp" in advice.lower()
+
+
+def test_assistant_object_safety() -> None:
+    dummy_obj = object()
+    assert not hasattr(dummy_obj, "ask")
+    assert not hasattr(dummy_obj, "suggest_remediation")
+    assert not hasattr(dummy_obj, "summarize_findings")
+

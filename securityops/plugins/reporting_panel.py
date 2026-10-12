@@ -76,7 +76,7 @@ class ReportingWidget(QWidget):
         if project is None:
             return None
         summary = self._summary.toPlainText().strip()
-        if not summary and self._ctx.assistant is not None:
+        if not summary and self._ctx.assistant is not None and hasattr(self._ctx.assistant, "summarize_findings"):
             summary = self._ctx.assistant.summarize_findings(
                 db.findings.list_for_project(project_id))
         return ReportBundle(
