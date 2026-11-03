@@ -6,18 +6,25 @@ suggested command line. Templates never run automatically — they are shown to
 the operator for review and only executed on an explicit action.
 
 Detection uses :func:`shutil.which` plus any ``extra_paths`` from config.
+Built-in checks (``securityops/checks.py``) need no install: they run with the
+current Python interpreter and are always available.
 """
 
 from __future__ import annotations
 
 import shlex
 import shutil
+import sys
 from dataclasses import dataclass, field
 from enum import Enum
+from pathlib import Path
 
 from .logging_config import get_logger
 
 _LOG = get_logger("tools")
+
+# Standalone, stdlib-only script that implements the built-in checks.
+CHECKS_SCRIPT = str(Path(__file__).resolve().parent.parent / "checks.py")
 
 
 class ToolCategory(str, Enum):
@@ -48,6 +55,8 @@ class ToolSpec:
     # Free-form usage / safety notes surfaced by the assistant.
     notes: str = ""
     aliases: tuple[str, ...] = field(default_factory=tuple)
+    # Built-in checks run with the current Python interpreter; no install needed.
+    builtin: bool = False
 
 
 # --------------------------------------------------------------------------- #
@@ -197,9 +206,77 @@ CATALOG: tuple[ToolSpec, ...] = (
               "written authorization to test, and be aware of who else it disrupts.",
         aliases=("aireplay-ng",),
     ),
+    # ----------------------------------------------------------------------- #
+    # Built-in checks: no install needed (see securityops/checks.py)
+    # ----------------------------------------------------------------------- #
+    ToolSpec(
+        "sops-dns", "Built-in DNS Lookup", "python", ToolCategory.RECON,
+        "Resolves the target's IPv4/IPv6 addresses and reverse DNS names.",
+        template="{binary} {script} dns {target}", builtin=True,
+    ),
+    ToolSpec(
+        "sops-ports", "Built-in Port Scan", "python", ToolCategory.ENUM,
+        "TCP connect scan of 31 common service ports (SSH, web, databases, RDP, ...).",
+        template="{binary} {script} ports {target}", builtin=True,
+        notes="Connect scan only: no SYN packets, OS detection or service probing.",
+    ),
+    ToolSpec(
+        "sops-http", "Built-in HTTP Probe", "python", ToolCategory.ENUM,
+        "Fetches the site and fingerprints the server, frameworks and CMS.",
+        template="{binary} {script} http {target}", builtin=True,
+    ),
+    ToolSpec(
+        "sops-headers", "Built-in Header Audit", "python", ToolCategory.VULN,
+        "Checks security headers, cookie flags, CORS, version banners and HTTPS redirect.",
+        template="{binary} {script} headers {target}", builtin=True,
+    ),
+    ToolSpec(
+        "sops-tls", "Built-in TLS Inspector", "python", ToolCategory.VULN,
+        "Validates the certificate (trust, hostname, expiry) and the negotiated protocol.",
+        template="{binary} {script} tls {target}", builtin=True,
+    ),
+    ToolSpec(
+        "sops-paths", "Built-in Exposure Check", "python", ToolCategory.WEB,
+        "Requests 20 well-known sensitive paths (.git, .env, admin panels, backups).",
+        template="{binary} {script} paths {target}", builtin=True,
+        notes="About 20 requests with a short delay between them; no wordlist brute force.",
+    ),
+    ToolSpec(
+        "sops-securitytxt", "Built-in security.txt Lookup", "python", ToolCategory.RECON,
+        "Finds the published security contact (RFC 9116) for responsible disclosure.",
+        template="{binary} {script} securitytxt {target}", builtin=True,
+    ),
 )
 
 CATALOG_BY_KEY: dict[str, ToolSpec] = {spec.key: spec for spec in CATALOG}
+
+# Official sites for documentation and downloads of the external tools.
+HOMEPAGES: dict[str, str] = {
+    "nmap": "https://nmap.org",
+    "amass": "https://github.com/owasp-amass/amass",
+    "subfinder": "https://github.com/projectdiscovery/subfinder",
+    "theharvester": "https://github.com/laramies/theHarvester",
+    "dnsrecon": "https://github.com/darkoperator/dnsrecon",
+    "naabu": "https://github.com/projectdiscovery/naabu",
+    "httpx": "https://github.com/projectdiscovery/httpx",
+    "whatweb": "https://github.com/urbanadventurer/WhatWeb",
+    "gobuster": "https://github.com/OJ/gobuster",
+    "ffuf": "https://github.com/ffuf/ffuf",
+    "dirsearch": "https://github.com/maurosoria/dirsearch",
+    "nikto": "https://github.com/sullo/nikto",
+    "sqlmap": "https://sqlmap.org",
+    "searchsploit": "https://www.exploit-db.com/searchsploit",
+    "burpsuite": "https://portswigger.net/burp",
+    "wireshark": "https://www.wireshark.org",
+    "metasploit": "https://www.metasploit.com",
+    "hashcat": "https://hashcat.net/hashcat/",
+    "hydra": "https://github.com/vanhauser-thc/thc-hydra",
+    "john": "https://www.openwall.com/john/",
+    "aircrack": "https://www.aircrack-ng.org",
+    "airmon": "https://www.aircrack-ng.org",
+    "airodump": "https://www.aircrack-ng.org",
+    "aireplay": "https://www.aircrack-ng.org",
+}
 
 
 @dataclass
@@ -230,6 +307,9 @@ class ToolRegistry:
         """Re-scan the system for each catalog tool."""
         search_path = self._build_search_path()
         for spec in CATALOG:
+            if spec.builtin:
+                self._detected[spec.key] = DetectedTool(spec=spec, path=sys.executable)
+                continue
             path = shutil.which(spec.binary, path=search_path)
             if path is None:
                 for alias in spec.aliases:
@@ -290,7 +370,12 @@ class ToolRegistry:
         spec = detected.spec
         binary = detected.path or spec.binary
         values: dict[str, str] = {"binary": binary, "target": target}
+        if spec.builtin:
+            values["script"] = CHECKS_SCRIPT
         values.update(params or {})
+        # Quote every value so paths with spaces or backslashes (Windows) and
+        # unusual targets survive split_command() as single arguments.
+        values = {name: shlex.quote(str(value)) for name, value in values.items()}
 
         try:
             return spec.template.format(**values).strip()

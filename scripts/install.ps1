@@ -20,11 +20,11 @@ Set-Location $ProjectRoot
 
 Write-Host "[install] SecurityOps Assistant Windows Setup" -ForegroundColor Cyan
 
-# 1. Locate Python 3.12+
+# 1. Locate Python 3.10+
 $PythonBin = Get-Command python3, python -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source -First 1
 
 if (-not $PythonBin) {
-    Write-Error "[install] No python interpreter found. Please install Python 3.12+ and add it to PATH."
+    Write-Error "[install] No python interpreter found. Please install Python 3.10+ and add it to PATH."
     exit 1
 }
 

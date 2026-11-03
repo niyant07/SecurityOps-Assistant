@@ -15,7 +15,12 @@ from __future__ import annotations
 from ..core.logging_config import get_logger
 from ..core.tools import ToolRegistry
 from ..workflow.plan import WorkflowPlan
-from ..workflow.planner import RuleBasedPlanner, _harmful_reason, extract_target
+from ..workflow.planner import (
+    RuleBasedPlanner,
+    _harmful_reason,
+    available_tool_keys,
+    extract_target,
+)
 from .methodology import methodology_for, tool_chain_for
 from .scope import Scope, ScopeValidator
 
@@ -70,7 +75,7 @@ class BugBountyPlanner:
     def recommend_next(self, scope: Scope, completed_tool_keys: list[str]) -> str:
         """Recommend the next methodology step given what has already run."""
         done = set(completed_tool_keys)
-        installed = {d.spec.key for d in self._tools.installed()}
+        installed = available_tool_keys(self._tools)
         for phase in methodology_for(scope.target_type):
             remaining = [k for k in phase.tool_keys if k not in done and k in installed]
             if remaining:

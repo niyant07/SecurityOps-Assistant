@@ -153,6 +153,49 @@ def _classify(tool: str, target: str, line: str) -> Candidate | None:
                         f"Add appropriate headers (CSP, X-Frame-Options, HSTS).",
             affected_asset=target, source_tool=tool, evidence=text, confidence=0.6)
 
+    if low.startswith("sensitive file exposed"):
+        path = text.split(":", 1)[1].split("(")[0].strip()
+        return Candidate(
+            title=f"Sensitive file exposed: {path}",
+            severity=Severity.HIGH,
+            description=f"{text}. The file's contents were retrieved, which can leak "
+                        f"source code, credentials or configuration. Remove it from the "
+                        f"web root or block access.",
+            affected_asset=target, source_tool=tool, evidence=text,
+            reproduction=f"Browse to {target.rstrip('/')}{path}", confidence=0.85)
+
+    if "certificate" in low and re.search(r"verification failed|expires in|could not be verified",
+                                          low):
+        return Candidate(
+            title="TLS certificate problem",
+            severity=Severity.MEDIUM,
+            description=f"{text}. Browsers will warn users or fail to connect, and an "
+                        f"untrusted certificate weakens protection against interception. "
+                        f"Renew or replace the certificate.",
+            affected_asset=target, source_tool=tool, evidence=text, confidence=0.75)
+
+    if low.startswith("outdated protocol"):
+        return Candidate(
+            title="Outdated TLS protocol negotiated",
+            severity=Severity.MEDIUM,
+            description=f"{text}. Disable TLS 1.0/1.1 and prefer TLS 1.2 or newer.",
+            affected_asset=target, source_tool=tool, evidence=text, confidence=0.7)
+
+    if "does not redirect to https" in low:
+        return Candidate(
+            title="HTTP is not redirected to HTTPS",
+            severity=Severity.LOW,
+            description="The site serves plain HTTP without redirecting to HTTPS, so "
+                        "users can be kept on an unencrypted connection.",
+            affected_asset=target, source_tool=tool, evidence=text, confidence=0.7)
+
+    if low.startswith("cookie") and "without" in low:
+        return Candidate(
+            title="Cookie missing security flags",
+            severity=Severity.LOW,
+            description=f"{text} Set Secure, HttpOnly and SameSite on session cookies.",
+            affected_asset=target, source_tool=tool, evidence=text, confidence=0.6)
+
     m = _HTTP_PATH.search(text)
     if m:
         code, path = m.group(1), m.group(2).lower()

@@ -1,300 +1,246 @@
 # SecurityOps Assistant
 
-An **offline, local-only** application for **authorized** security assessments,
-built for Kali Linux. Its default interface is a polished browser workspace
-served at `127.0.0.1`; an optional PySide desktop UI is also available. It
-provides project management, an asset/scope inventory, scan history, evidence
-collection, an offline knowledge-base assistant, and professional
-HTML/PDF/Markdown reports — all running on your machine with **no cloud
-services**.
+An **AI-assisted, non-destructive website security assessment tool** for targets you own
+or are explicitly authorized to assess. Enter a domain, confirm authorization, and the
+app:
 
-> ⚖️ **Authorized use only.** This tool is designed exclusively for security
-> assessments of systems you own or for which you have **explicit written
-> permission** to test. You are responsible for complying with all applicable
-> laws and the terms of your engagement. The application never performs
-> exploitation or attacks on its own — it organizes work and launches
-> operator-approved tools.
+1. **Gathers information** — DNS records, HTTP/HTTPS responses, the TLS certificate,
+   HTTP security headers and visible technologies.
+2. **Analyzes it with AI** — explains each finding, why it matters, its severity, the
+   evidence behind it and how to fix it, separating *confirmed* findings from
+   *potential* risks.
+3. **Generates a report** — a professional HTML report (and PDF where WeasyPrint is
+   installed).
 
-## Objective
+It runs on your own machine as a local web page at `http://127.0.0.1:8765`.
 
-To design and develop a **local-first, AI-assisted desktop platform** that
-converts an analyst's plain-English objective into a **safe, approval-gated**
-cybersecurity assessment workflow, and carries it through execution, evidence
-collection, and professional reporting — **entirely offline**, for authorized
-security testing only.
-
-Supporting goals: interpret natural-language goals into reviewable plans; enforce
-safety by design (approval gates, scope validation, refusal of harmful requests);
-auto-detect and coordinate Kali tools from one interface; correlate output into
-ranked, evidence-backed findings with CVSS and confidence; and generate
-assessment and responsible-disclosure reports — all with a local AI model that
-keeps data private.
+> ⚖️ **Authorized use only.** Assess only systems you own or have written permission
+> to test. The tool performs no exploitation, brute force, credential attacks,
+> stealth or persistence — only the kind of requests a normal browser makes.
 
 ---
 
-## Features
+## Setup
 
-| Area | Capability |
-|------|-----------|
-| **Dashboard** | Live overview of saved projects, assets, findings, recent scans, and detected tools |
-| **Quick Scan** | Paste a link → confirm authorization → one click → vulnerability report, downloaded automatically |
-| **AI Workflow** | Plain-English goal → reviewable plan → approve → background run → findings → plain-English explanation |
-| **AI Bug Bounty** | Import & validate engagement scope, build a target-type methodology, run in-scope-only steps, report with reproduction steps |
-| **Responsible Disclosure** | Curate findings, draft a disclosure report + email, detect the target's security.txt, prepare (never auto-send) and record submissions |
-| **Projects** | Create/manage engagements, stored in a local SQLite database |
-| **Assets & Scope** | Inventory hosts/URLs, mark in-scope vs. out-of-scope |
-| **Tool Launcher** | Auto-detects installed Kali tools; builds & launches commands |
-| **Scan History** | Records every launched command, status, timing, and output |
-| **Evidence** | Attach screenshots, files, and notes to findings |
-| **Findings & Reporting** | Severity, CVSS, remediation, references → HTML/PDF/Markdown |
-| **Assistant** | Offline knowledge base: explains tools, suggests next steps, drafts commands |
-| **Plugins** | Drop-in modules add new tabs, tools, or report sections |
+Requirements: **Python 3.10+**. Node.js is only needed if you change the frontend.
 
-### Quick Scan (the fastest way to check a link)
+**Windows (PowerShell)**
 
-The **Quick Scan** tab is the friendliest entry point — no need to understand
-projects, plans, or tabs first:
+```powershell
+cd SecurityOps-Assistant
+python -m venv .venv
+.\.venv\Scripts\activate
+pip install -r requirements.txt
+python -m securityops
+```
 
-1. Paste a link or host (`https://example.com`, `example.com`, `10.0.0.5`).
-2. Tick **"I own this / have permission to test it."** — required; the scan
-   button stays disabled until you do.
-3. Click **Scan Now**. You still see the exact commands and confirm once before
-   anything runs — the default scan is always conservative (recon +
-   enumeration + a non-destructive vulnerability check; brute-force/injection
-   tools are never included unless you explicitly ask for them elsewhere).
-4. Watch live progress, then review the flagged findings.
-5. Click **Download Report** — saved straight to your **Downloads** folder,
-   no dialog.
+**Linux / macOS**
 
-If no project is active, one is created automatically for the target so a
-first-time user never has to deal with project setup. Everything still goes
-through the same scope-safe planner, background engine, correlation/triage,
-and report generator as the rest of the app.
+```bash
+cd SecurityOps-Assistant
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+python -m securityops
+```
 
-### AI Workflow (natural language → safe execution)
+(`scripts/install.ps1 -Run` and `scripts/install.sh --run` do the same in one step.)
 
-Type a goal such as *"Identify the IP address and open ports of my website
-example.com"*. The assistant then:
+The browser opens at `http://127.0.0.1:8765`. Options: `--port 9000`, `--no-browser`.
+Stop the server with **Ctrl+C**.
 
-1. Analyzes the request and **refuses** anything harmful (phishing, malware,
-   ransomware, credential theft, DoS).
-2. Resolves the target and proposes an **ordered plan** of Kali tools, each with
-   a rationale and the exact command — built from vetted templates, never from
-   raw model text.
-3. Waits for you to **approve** the specific steps (checkbox per step).
-4. Runs approved steps in the **background**, streaming live output.
-5. **Highlights findings** (open ports, services, discovered paths, reported
-   issues) in a dashboard.
-6. **Explains** each step and the overall result in plain English.
-7. Persists every executed command and its output for **audit**.
+### AI provider (optional)
 
-Planning and explanation use a **local LLM (Ollama)** when one is running on
-`localhost`; if none is available the app falls back to deterministic rules and
-remains fully functional offline.
+The AI analysis uses the provider set in `securityops/config/default_config.yaml`
+(override in your user config file, `~/.config/securityops/config.yaml` on Linux or
+`%APPDATA%\securityops\config.yaml` on Windows):
 
-### Responsible Disclosure & Reporting
+| `llm.provider` | What you need |
+|---|---|
+| `ollama` (default) | A local model: install [Ollama](https://ollama.com), then `ollama pull llama3` and keep `ollama serve` running. Nothing leaves your machine. |
+| `anthropic` | `pip install anthropic` and set the `ANTHROPIC_API_KEY` environment variable. Model: `llm.api_model` (default `claude-opus-5-5`). Keys are never stored in config files. |
+| `none` | No AI; rule-based analysis only. |
 
-After an authorized assessment, the Disclosure tab helps you disclose findings
-responsibly — with a human in control at every step:
+If the provider is unavailable, the app still shows all scan results and a rule-based
+analysis, with a message explaining what to fix.
 
-1. **Curate** — deduplicate findings, rank by severity then confidence, and flag
-   items still marked *Tentative* (requiring manual verification).
-2. **Draft report** — an editable disclosure report with Executive Summary,
-   Scope, Methodology, Technical Findings, CVSS, Business Impact, Evidence,
-   Reproduction Steps, Remediation, References, and a Timeline of Assessment.
-3. **Detect the security contact** — parse or fetch the target's RFC 9116
-   `security.txt` and auto-fill the recipient.
-4. **Draft a professional, vendor-friendly email** (LLM-refined if available).
-5. **Approve & prepare** — on explicit approval the app saves the report and an
-   `.eml` draft and opens your mail client. **It never sends anything itself** —
-   you deliver it through the organization's published process and confirm.
-6. **Record** every submission (version, recipient, status, date) locally.
+### PDF reports (optional)
 
-Safety: disclosure is refused for unauthorized or out-of-scope targets, and no
-finding is ever fabricated — each carries a confidence level and evidence.
+PDF export uses WeasyPrint (`pip install weasyprint`; it also needs system libraries
+on Windows/macOS). Without it, export the HTML report and use the browser's
+**Print → Save as PDF**.
 
-### AI Bug Bounty Assistant
+### Deploying online (Render)
 
-A dedicated tab for authorized bug bounty work, fully integrated with the shared
-project database, workflow engine, and reporting:
+The repository includes a `Dockerfile` and a `render.yaml` Blueprint. The hosted
+copy runs in **public mode**:
 
-1. **Import & validate scope** — paste an engagement's in-scope / out-of-scope
-   rules (hostnames, `*.wildcards`, IPs, CIDRs). Entries are saved as project
-   assets; rules are stored on the project.
-2. **Scope is a hard gate** — the planner refuses any target that is out of scope
-   or not listed; out-of-scope rules always win.
-3. **Target-type methodology** — pick Web / API / Mobile backend / Desktop /
-   Network and get a tailored recon → enumeration → assessment chain.
-4. **Approve & run** on the same background engine, with findings highlighted.
-5. **Correlate & triage** — tool output is classified into candidate issues with
-   suggested CVSS severity, flagged for verification; review them and promote the
-   real ones into the project's Findings (which then flow into the report).
-6. **Recommend next step** — the assistant suggests the next methodology phase
-   based on what has already run and the scope.
-7. **Bug bounty report** — Executive summary, Scope, Methodology, Findings
-   (severity / CVSS / evidence), **reproduction steps**, remediation, and
-   references, exported to HTML / PDF / Markdown.
+- every API call needs an **access code** (`SECURITYOPS_ACCESS_CODE`), so strangers
+  cannot use your server as a scanner;
+- it **only assesses public internet addresses**: private, loopback and cloud-internal
+  addresses (and redirects to them) are refused, so local lab targets need the local
+  app;
+- all visitors share one assessment at a time, so it suits a demo, not many users.
+
+Steps:
+
+1. Sign in at [render.com](https://render.com) with GitHub.
+2. **New → Blueprint**, pick `SecurityOps-Assistant` and the branch to deploy, and
+   click **Apply**.
+3. Open the new service → **Environment**: copy the generated
+   `SECURITYOPS_ACCESS_CODE`. Optionally set `ANTHROPIC_API_KEY` to enable AI analysis
+   (without it the hosted copy shows the rule-based analysis).
+4. Open the `https://securityops-assistant-….onrender.com` link and enter the access
+   code.
+
+The free plan sleeps when idle, so the first visit can take about a minute.
+
+To run the hosted version locally: `docker build -t securityops .` then
+`docker run -p 8765:8765 -e SECURITYOPS_ACCESS_CODE=<a long code> securityops`.
+
+---
+
+## Using the app
+
+The single screen has three sections:
+
+1. **Information gathering** — type a target (`example.com`, `https://example.com`, or a
+   lab address like `127.0.0.1:8080`), tick *“I own this target or have explicit
+   permission”*, and click **Start Assessment**. A progress list shows each step.
+   Results appear as DNS, HTTP/HTTPS, TLS, security headers and technologies.
+2. **AI security analysis** — click **Run AI Analysis**. Each finding shows a severity,
+   whether it is *Confirmed* or a *Potential risk*, the evidence, why it matters, and
+   the remediation.
+3. **Report** — **Export HTML Report**, **Export PDF**, or **Preview**.
+
+### Scope
+
+Besides the per-assessment authorization checkbox, you can restrict targets in the
+config:
+
+```yaml
+assessment:
+  allowed_targets: ["*.mylab.test", "127.0.0.1", "10.0.0.0/24"]  # empty = any confirmed target
+  blocked_targets: ["admin.mylab.test"]                           # always refused
+```
+
+---
 
 ## Architecture
 
 ```
-securityops/
-├── core/          Config, logging, SQLite database, threading, plugin & tool managers
-├── models/        Typed dataclasses for Project, Asset, Scan, Finding, Evidence
-├── workflow/      AI workflow: plan model, NL planner, output parsers, engine, explainer
-├── bugbounty/     Scope import/validation, methodology, planner, triage, report
-├── disclosure/    Finding curation, security.txt, disclosure email & report
-├── plugins/       Built-in feature plugins (AI workflow, bug bounty, disclosure, tools, ...)
-├── ai/            Offline knowledge-base assistant + local LLM client (no cloud calls)
-├── reporting/     Jinja2 → HTML/PDF/Markdown report generator
-├── gui/           PySide6 dark-themed main window and widgets
-├── config/        Default YAML configuration
-└── tests/         Unit tests (pytest)
+Browser (React single page)
+   │  JSON over http://127.0.0.1 only
+   ▼
+securityops/web/            loopback HTTP server + 5 JSON endpoints
+   │
+   ▼
+securityops/assessment/
+   ├── gather.py    Component 1: parse target → DNS → HTTP/HTTPS → TLS →
+   │                security headers → technologies → summary   (ScanResult)
+   ├── analysis.py  Component 2: rule-based findings → LLM provider → validated merge
+   │                (Analysis)
+   └── report.py    Component 3: Jinja2 HTML report (+ PDF via WeasyPrint)
 ```
 
-### Run the local web UI
+| Path | Purpose |
+|---|---|
+| `securityops/assessment/gather.py` | All information gathering. Uses `dnspython`, `urllib`, `ssl` and `socket` — no external command-line tools. |
+| `securityops/assessment/analysis.py` | Rule-based findings, the `LLMProvider` interface (`OllamaProvider`, `AnthropicProvider`), the prompt, and validation of the model's answer. |
+| `securityops/assessment/report.py` + `reporting/templates/assessment_report.html` | Report rendering. |
+| `securityops/web/server.py` | HTTP server: loopback-only, rejects cross-site requests, serves the UI. |
+| `securityops/web/state.py` | `AssessmentSession`: runs gathering and analysis in background threads, enforces scope. |
+| `securityops/web/api.py` | Endpoints: `GET /api/status`, `POST /api/assess`, `POST /api/analyze`, `POST /api/reset`, `GET /api/report`. |
+| `web-ui/src/App.jsx` | The single assessment screen (built into `securityops/web/dist`). |
+| `securityops/config/default_config.yaml` | Timeouts, scope, AI provider, report details. |
 
-The default `python -m securityops` command starts the local browser interface
-and opens it at
-`http://127.0.0.1:8765` by default; use `--no-browser` to suppress automatic
-browser launch or `--port 9000` to choose another port. The server refuses
-non-loopback bind addresses. Create an authorized project, generate a plan,
-review its exact commands, and explicitly approve the steps you want to run.
-Project, scan, and workflow data use the same local database as the optional
-desktop app. `python -m securityops.web` and the `securityops-web` command are
-equivalent launchers. To use the PySide desktop UI instead, run
-`python -m securityops.desktop` (or `securityops-desktop` after installation).
+### How the AI is kept safe and honest
 
-The browser UI is built with React and Vite. Its compiled bundle is included
-with the Python package; Node.js is only needed when developing or rebuilding
-the frontend.
+1. The app **collects results first**. The model receives the results as text and
+   returns text; it has no tools and **cannot run commands**.
+2. Fixed rules produce the baseline findings, each with the exact evidence that
+   triggered it (for example *“the response has no Content-Security-Policy header”*).
+3. The model's JSON answer is **validated**. It may improve explanations and adjust
+   severity, but it **cannot change evidence**, cannot mark its own ideas as
+   *Confirmed* (anything it adds becomes a *Potential risk*), and cannot remove rule
+   findings. Invalid answers are discarded and the rule-based analysis is shown.
 
-## Requirements
+### Other code in the repository
 
-- **Python 3.12+**
-- **PySide6 6.6+**
-- **Node.js 20+ and npm** (frontend development/build only; not required to run)
-- Linux (Kali) recommended for full tool integration; the core and reporting
-  layers are cross-platform.
+The repository also contains an earlier, broader PySide6 desktop application
+(`python -m securityops.desktop`) with tool launching, bug bounty and disclosure
+modules. It is optional and not needed for the workflow above.
 
-## Installation
-
-**Kali Linux (recommended, incl. inside a VirtualBox VM):** run the installer,
-which installs required system/Qt libraries via `apt`, creates a `.venv/`, and
-installs Python dependencies:
+### Frontend development
 
 ```bash
-git clone https://github.com/niyant07/SecurityOps-Assistant.git
-cd SecurityOps-Assistant
-./scripts/install.sh          # installs everything
-./scripts/install.sh --run    # installs, then launches the app immediately
-```
-
-**Windows (PowerShell):**
-
-```powershell
-git clone https://github.com/niyant07/SecurityOps-Assistant.git
-cd SecurityOps-Assistant
-.\scripts\install.ps1 -Run    # installs, then launches the app immediately
-```
-
-**Manual / other platforms:**
-
-```bash
-python3 -m venv .venv
-source .venv/bin/activate    # On Windows: .\.venv\Scripts\activate
-python -m pip install -r requirements.txt
-```
-
-## Running
-
-```bash
-python -m securityops
-```
-
-For frontend development, install Node.js 20+ and run these in separate
-terminals from the repository root:
-
-```powershell
-# Terminal 1: Python API on loopback
-python -m securityops.web --no-browser
-
-# Terminal 2: React development server
 cd web-ui
-npm ci
-npm run dev
+npm install
+npm run build      # writes the bundle into securityops/web/dist
 ```
 
-Open the Vite URL (usually `http://127.0.0.1:5173`). After making frontend
-changes, run `npm run build` from `web-ui/` to refresh the bundled UI used by
-`python -m securityops`.
-
-On first launch the app creates its data directory at
-`~/.local/share/securityops/` (database, logs, evidence) and a config file at
-`~/.config/securityops/config.yaml`.
-
-### Optional: local LLM for the AI Workflow tab
-
-The AI Workflow tab works out of the box using deterministic rules. For more
-fluent planning and explanations, run a **local** [Ollama](https://ollama.com)
-model — no data leaves your machine:
-
-```bash
-# install Ollama (see ollama.com), then:
-ollama pull llama3
-ollama serve      # usually already running as a service
-```
-
-The app auto-detects Ollama on `localhost:11434`. Change the model/host under
-the `llm:` section of `config.yaml`, or set `llm.enabled: false` to force
-rules-only mode.
+---
 
 ## Testing
 
 ```bash
+pip install pytest
 python -m pytest
 ```
 
-## Configuration
+`tests/test_assessment.py` covers target validation, information gathering (against a
+local test web server), rule findings, AI-answer validation, the fallback when the model
+is unavailable, and report contents. `tests/test_web.py` runs the full
+gather → analyze → report workflow through the web API and checks the authorization,
+scope and cross-site request protections.
 
-Configuration is loaded from, in order of precedence:
+---
 
-1. `~/.config/securityops/config.yaml` (user overrides)
-2. `securityops/config/default_config.yaml` (shipped defaults)
+## Limitations
 
-Environment variable `SECURITYOPS_CONFIG` may point to an alternate file.
+- Passive checks only: DNS, the home page over HTTP/HTTPS, and one TLS handshake. No
+  crawling, login, port scanning or exploitation, so application flaws such as SQL
+  injection or broken access control are **out of scope**.
+- Technology detection relies on public hints and can be incomplete or wrong.
+- Results are a snapshot from your network location; CDNs and firewalls can change
+  what is seen.
+- AI explanations are assistive and can be imperfect. *Potential risk* findings must be
+  verified manually.
+- Assesses one target at a time; results are kept in memory until you export the
+  report.
 
-## Database & migrations
+---
 
-The SQLite database is created and versioned automatically (`PRAGMA
-user_version`). On startup the app applies any pending schema migrations in
-place, so **existing databases are upgraded automatically on first launch** —
-no manual steps and no data loss. For example, upgrading to the Bug Bounty
-release migrates the database from schema v1 to v2 (adding a `reproduction`
-column to findings) the first time you open an older project. Migrations are
-incremental and forward-only; back up your data directory before upgrading if
-you want a rollback point.
+## Safe demo procedure (for the presentation)
 
-## Security & Privacy
+Use targets you control, so the demo is safe and repeatable.
 
-- No telemetry, no cloud APIs. The only network calls are (a) to a **local**
-  LLM on `localhost` if you enable one, and (b) to the targets you choose to
-  assess.
-- All data stays in your local data directory.
-- The AI planner **refuses** harmful objectives and never executes a step
-  without explicit per-step approval; commands are built from vetted templates,
-  not from raw model output.
-- Every executed command and its output is persisted for audit.
-- Tools are only launched when you explicitly approve/launch them; commands are
-  always shown for review first.
-- **Wireless auditing is manual-only, never automated.** The aircrack-ng suite
-  (`airmon-ng`/`airodump-ng`/`aireplay-ng`/`aircrack-ng`) is available in the
-  Tool Launcher for authorized WiFi security testing, but is structurally
-  excluded from the AI Workflow's automatic planner — no goal text can make the
-  assistant run a wireless attack for you. Deauthentication affects every
-  client on the target access point, not just yours; only run these tools
-  against a network you own or have explicit written authorization to test.
+**1. A local lab site (works offline).** In a second terminal, start Python's built-in
+web server:
 
-## License
+```bash
+python -m http.server 8080 --bind 127.0.0.1
+```
 
-MIT — see headers. Provided "as is" for lawful, authorized use only.
+In the app, enter `127.0.0.1:8080`, tick the authorization box and click **Start
+Assessment**. Expected results: HTTP 200, all security headers missing, and the
+`Server: SimpleHTTP/... Python/...` header flagged as a version disclosure (*Potential
+risk*). TLS shows *“No TLS service reachable”*, since the lab has no HTTPS.
+
+**2. Show the AI analysis.** Click **Run AI Analysis**. With Ollama running you get the
+AI explanation. To show the safety fallback, stop Ollama and run it again: the
+rule-based results still appear, with a clear message.
+
+**3. Export the report.** Click **Export HTML Report** and open it to walk through
+scope, executive summary, findings and evidence, severity, remediation and
+limitations.
+
+**4. (Optional) A real HTTPS site you own**, such as your own GitHub Pages site or a
+personal domain, to show DNS records and TLS certificate details.
+
+**5. Show the guard rails.** Try to start without ticking the authorization box (the
+button stays disabled), and add a `blocked_targets` entry to show a refused target.
+
+**Points to explain in the viva:** the three components and how data flows between
+them; why the model only analyses collected data (no command execution); how
+*Confirmed* differs from *Potential risk*; and why the checks are non-destructive.

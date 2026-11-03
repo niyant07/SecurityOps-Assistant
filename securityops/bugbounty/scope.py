@@ -85,7 +85,8 @@ def parse_scope_text(text: str) -> Scope:
             section = "rules"
             continue
 
-        item = line.lstrip("-*•").strip()
+        # Strip a list bullet, but keep the "*" of a bare "*.example.com" wildcard.
+        item = re.sub(r"^[-*•]\s+", "", line).strip()
         if section == "in":
             _add(scope.in_scope, item)
         elif section == "out":

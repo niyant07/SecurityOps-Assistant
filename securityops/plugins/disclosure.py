@@ -13,7 +13,6 @@ never fabricates findings — each carries a confidence level.
 
 from __future__ import annotations
 
-import email.message
 from datetime import datetime
 from pathlib import Path
 from urllib.parse import quote
@@ -41,6 +40,7 @@ from ..disclosure import (
     curate_findings,
     parse_security_txt,
 )
+from ..disclosure.email_gen import write_eml_draft
 from ..disclosure.report import DisclosureReportBundle, DisclosureReportGenerator
 from ..disclosure.security_txt import fetch_security_txt
 from ..gui import widgets
@@ -391,17 +391,7 @@ class DisclosureWidget(QWidget):
             f"process. Update the record's status once sent.")
 
     def _write_eml(self, recipient: str, subject: str, body: str, report_path: str) -> str:
-        msg = email.message.EmailMessage()
-        msg["To"] = recipient
-        msg["Subject"] = subject
-        body_note = body
-        if report_path:
-            body_note += f"\n\n[Attach the report before sending: {report_path}]"
-        msg.set_content(body_note)
-        stamp = datetime.now().strftime("%Y%m%d_%H%M")
-        out = paths.reports_dir() / f"disclosure_draft_{stamp}.eml"
-        out.write_bytes(bytes(msg))
-        return str(out)
+        return str(write_eml_draft(recipient, subject, body, report_path, paths.reports_dir()))
 
     # ------------------------------------------------------------------ #
     def _reload_history(self) -> None:

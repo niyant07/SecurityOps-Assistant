@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Security Assessment — {{ scan.host }}</title>
+<style>
+  :root { --ink: #1c2430; --muted: #5b6676; --line: #dde3ea; --brand: #1f4f8b; }
+  * { box-sizing: border-box; }
+  body { margin: 0; color: var(--ink); background: #fff; font: 14px/1.6 "Segoe UI", system-ui, -apple-system, sans-serif; }
+  main { max-width: 900px; margin: 0 auto; padding: 32px 24px 48px; }
+  .banner { padding: 6px 12px; color: #fff; background: #8b1f2b; font-size: 11px; font-weight: 700; letter-spacing: 1.5px; text-align: center; }
+  header { padding-bottom: 18px; border-bottom: 3px solid var(--brand); }
+  h1 { margin: 0 0 4px; color: var(--brand); font-size: 26px; }
+  h2 { margin: 32px 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--line); color: var(--brand); font-size: 18px; }
+  h3 { margin: 0; font-size: 15px; }
+  .meta { display: grid; grid-template-columns: 160px 1fr; gap: 4px 12px; margin-top: 14px; font-size: 13px; }
+  .meta dt { color: var(--muted); }
+  .meta dd { margin: 0; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { padding: 7px 9px; border: 1px solid var(--line); text-align: left; vertical-align: top; }
+  th { background: #f3f6f9; }
+  code { font: 12px Consolas, monospace; overflow-wrap: anywhere; }
+  .counts { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+  .count { padding: 6px 12px; border-radius: 6px; color: #fff; font-size: 13px; font-weight: 600; }
+  .sev-Critical { background: #9b1c1c; } .sev-High { background: #c2410c; } .sev-Medium { background: #a16207; }
+  .sev-Low { background: #15803d; } .sev-Informational { background: #3b5b8c; }
+  .finding { margin: 14px 0; padding: 14px 16px; border: 1px solid var(--line); border-left: 5px solid #999; border-radius: 6px; break-inside: avoid; }
+  .finding.Critical { border-left-color: #9b1c1c; } .finding.High { border-left-color: #c2410c; } .finding.Medium { border-left-color: #a16207; }
+  .finding.Low { border-left-color: #15803d; } .finding.Informational { border-left-color: #3b5b8c; }
+  .finding-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .pill { padding: 2px 8px; border-radius: 10px; color: #fff; font-size: 11px; font-weight: 600; }
+  .status { padding: 2px 8px; border: 1px solid var(--line); border-radius: 10px; color: var(--muted); font-size: 11px; }
+  .label { margin-top: 8px; color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; }
+  .label + p { margin: 2px 0 0; }
+  .ok { color: #15803d; font-weight: 600; } .bad { color: #b91c1c; font-weight: 600; }
+  .note { padding: 10px 12px; border: 1px solid #f0d9a8; border-radius: 6px; background: #fff8e8; font-size: 13px; }
+  footer { margin-top: 36px; color: var(--muted); font-size: 12px; }
+</style>
+</head>
+<body>
+<div class="banner">{{ classification }}</div>
+<main>
+<header>
+  <h1>Website Security Assessment</h1>
+  <div>{{ scan.target }}</div>
+  <dl class="meta">
+    <dt>Target</dt><dd>{{ scan.target }}</dd>
+    <dt>Assessment date</dt><dd>{{ scan.started_at }} (UTC)</dd>
+    <dt>Report generated</dt><dd>{{ generated }}</dd>
+    <dt>Prepared by</dt><dd>{{ author }}{% if organization %}, {{ organization }}{% endif %}</dd>
+    <dt>Analysis</dt><dd>{% if analysis.source == "ai" %}AI-assisted ({{ analysis.provider }}){% else %}Rule-based{% endif %}</dd>
+  </dl>
+</header>
+
+<h2>1. Scope</h2>
+<p>The assessment covered the single target <strong>{{ scan.target }}</strong>, which the
+operator confirmed they own or are explicitly authorized to assess. Checks performed: DNS
+records, HTTP and HTTPS responses for the home page, the TLS certificate, recommended HTTP
+security headers, and publicly visible technology hints. All checks were non-destructive.</p>
+
+<h2>2. Executive summary</h2>
+<p>{{ analysis.executive_summary }}</p>
+<div class="counts">
+  {% for sev, n in counts.items() %}<span class="count sev-{{ sev }}">{{ n }} {{ sev }}</span>{% endfor %}
+</div>
+{% if analysis.error %}<p class="note">{{ analysis.error }}</p>{% endif %}
+
+<h2>3. Findings</h2>
+<p><strong>Confirmed</strong> means directly observed in the collected evidence.
+<strong>Potential risk</strong> means inferred from the evidence and needs manual verification.</p>
+{% for f in analysis.findings %}
+<div class="finding {{ f.severity }}">
+  <div class="finding-head">
+    <span class="pill sev-{{ f.severity }}">{{ f.severity }}</span>
+    <h3>{{ f.id }}. {{ f.title }}</h3>
+    <span class="status">{{ f.status }}</span>
+  </div>
+  <div class="label">Evidence</div><p><code>{{ f.evidence }}</code></p>
+  <div class="label">Why it matters</div><p>{{ f.why_it_matters }}</p>
+  <div class="label">Remediation</div><p>{{ f.remediation }}</p>
+</div>
+{% else %}
+<p>No issues were identified in the areas checked.</p>
+{% endfor %}
+
+<h2>4. Evidence collected</h2>
+<h3>DNS records</h3>
+{% if scan.dns %}
+<table><tr><th>Type</th><th>Values</th></tr>
+{% for rtype, values in scan.dns.items() %}<tr><td>{{ rtype }}</td><td><code>{{ values | join(", ") }}</code></td></tr>{% endfor %}
+</table>
+{% else %}<p>No DNS records were found.</p>{% endif %}
+
+<h3 style="margin-top:16px">HTTP / HTTPS</h3>
+<table><tr><th>Scheme</th><th>Status</th><th>Final URL</th><th>Server</th><th>Time</th></tr>
+{% for scheme, r in scan.http.items() %}
+<tr><td>{{ scheme | upper }}</td><td>{{ r.status }} {{ r.reason }}</td><td><code>{{ r.final_url }}</code></td><td>{{ r.headers.get("Server", "—") }}</td><td>{{ r.response_ms }} ms</td></tr>
+{% else %}<tr><td colspan="5">No web server responded.</td></tr>{% endfor %}
+</table>
+
+<h3 style="margin-top:16px">TLS certificate</h3>
+{% if scan.tls.valid %}
+<table>
+  <tr><th>Subject</th><td>{{ scan.tls.subject }}</td></tr>
+  <tr><th>Issuer</th><td>{{ scan.tls.issuer }}</td></tr>
+  <tr><th>Valid</th><td>{{ scan.tls.not_before }} to {{ scan.tls.not_after }} ({{ scan.tls.days_remaining }} days left)</td></tr>
+  <tr><th>Protocol</th><td>{{ scan.tls.protocol }} · {{ scan.tls.cipher }}</td></tr>
+  <tr><th>Names covered</th><td><code>{{ scan.tls.san | join(", ") }}</code></td></tr>
+</table>
+{% else %}<p>{{ scan.tls.error or "Not checked." }}</p>{% endif %}
+
+<h3 style="margin-top:16px">Security headers</h3>
+<table><tr><th>Header</th><th>Status</th><th>Value</th></tr>
+{% for h in scan.headers if h.applicable %}
+<tr><td>{{ h.name }}</td><td>{% if h.present %}<span class="ok">Present</span>{% else %}<span class="bad">Missing</span>{% endif %}</td><td><code>{{ h.value or "—" }}</code></td></tr>
+{% else %}<tr><td colspan="3">Not checked (no web response).</td></tr>{% endfor %}
+</table>
+
+<h3 style="margin-top:16px">Technologies</h3>
+{% if scan.technologies %}
+<table><tr><th>Technology</th><th>Evidence</th></tr>
+{% for t in scan.technologies %}<tr><td>{{ t.name }}</td><td>{{ t.evidence }}</td></tr>{% endfor %}
+</table>
+{% else %}<p>No technology hints were observed.</p>{% endif %}
+
+<h2>5. Limitations</h2>
+<ul>{% for item in limitations %}<li>{{ item }}</li>{% endfor %}</ul>
+{% if scan.errors %}<p class="note">Errors during collection: {{ scan.errors | join("; ") }}</p>{% endif %}
+
+<footer>Generated by SecurityOps Assistant. For authorized assessment only.</footer>
+</main>
+</body>
+</html>

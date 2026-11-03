@@ -1,306 +1,236 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
-  Activity,
-  ArrowDown,
-  ArrowUpRight,
-  Check,
+  AlertTriangle,
+  Bot,
   CheckCircle2,
-  ChevronRight,
-  CircleHelp,
-  Clock3,
-  Command,
-  FileCheck2,
+  Circle,
+  Download,
+  Eye,
+  FileText,
   Globe2,
   LoaderCircle,
   LockKeyhole,
   Play,
-  Radio,
-  RefreshCw,
-  ScanLine,
+  RotateCcw,
   Shield,
-  ShieldCheck,
-  Square,
-  Terminal,
-  Wrench,
   X,
 } from "lucide-react";
+import { AccessCodeRequired, download, request, setAccessCode } from "./api.js";
 
-async function request(path, body) {
-  const response = await fetch(path, body ? {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  } : { cache: "no-store" });
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.error || `Request failed (${response.status})`);
-  return data;
+function Spinner({ size = 15 }) {
+  return <LoaderCircle className="spin" size={size} />;
 }
 
-function StatusBadge({ status }) {
-  const style = status.toLowerCase();
-  return <span className={`status-badge ${style}`}><i />{status}</span>;
+function Card({ title, icon: Icon, children, actions }) {
+  return (
+    <section className="card">
+      <div className="card-head">
+        {Icon && <span className="card-icon"><Icon size={16} /></span>}
+        <h2>{title}</h2>
+        {actions && <div className="card-actions">{actions}</div>}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function StepIcon({ status }) {
+  if (status === "done") return <CheckCircle2 size={15} className="ok" />;
+  if (status === "running") return <Spinner size={15} />;
+  return <Circle size={15} className="muted" />;
 }
 
 function App() {
   const [state, setState] = useState(null);
-  const [connectionError, setConnectionError] = useState("");
-  const [projectName, setProjectName] = useState("");
   const [target, setTarget] = useState("");
   const [authorized, setAuthorized] = useState(false);
-  const [goal, setGoal] = useState("");
-  const [selectedSteps, setSelectedSteps] = useState([]);
   const [busy, setBusy] = useState("");
   const [notice, setNotice] = useState(null);
-  const [activeNav, setActiveNav] = useState("workspace");
+  const [offline, setOffline] = useState(false);
+  const [needsCode, setNeedsCode] = useState(false);
+  const [code, setCode] = useState("");
 
   const refresh = useCallback(async () => {
     try {
-      setState(await request("/api/state"));
-      setConnectionError("");
+      setState(await request("/api/status"));
+      setOffline(false);
+      setNeedsCode(false);
     } catch (error) {
-      setConnectionError(error.message);
+      if (error instanceof AccessCodeRequired) setNeedsCode(true);
+      else setOffline(true);
     }
   }, []);
 
   useEffect(() => {
     refresh();
-    const timer = window.setInterval(refresh, 1500);
+    const timer = window.setInterval(refresh, 1000);
     return () => window.clearInterval(timer);
   }, [refresh]);
 
   useEffect(() => {
-    const pending = state?.plan?.steps
-      ?.filter((step) => step.status === "Pending")
-      .map((step) => step.index) ?? [];
-    setSelectedSteps((current) => current.filter((index) => pending.includes(index)));
-  }, [state?.plan]);
+    if (!notice) return undefined;
+    const timer = window.setTimeout(() => setNotice(null), 6000);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
 
-  const installedTools = useMemo(
-    () => state?.tools?.filter((tool) => tool.installed) ?? [],
-    [state],
-  );
-  const pendingSteps = state?.plan?.steps?.filter((step) => step.status === "Pending") ?? [];
-
-  function showNotice(message, kind = "info") {
-    setNotice({ message, kind });
-    window.setTimeout(() => setNotice(null), 5200);
+  async function act(name, fn) {
+    setBusy(name);
+    try { await fn(); await refresh(); } catch (error) { setNotice({ kind: "error", text: error.message }); } finally { setBusy(""); }
   }
 
-  async function handleProject(event) {
+  const start = (event) => {
     event.preventDefault();
-    setBusy("project");
-    try {
-      await request("/api/project", { name: projectName, target, authorized });
-      setProjectName("");
-      setTarget("");
-      setAuthorized(false);
-      setGoal("");
-      setSelectedSteps([]);
-      await refresh();
-      showNotice("Authorized engagement saved locally.", "success");
-    } catch (error) {
-      showNotice(error.message, "error");
-    } finally {
-      setBusy("");
-    }
+    act("start", () => request("/api/assess", { target, authorized }));
+  };
+  const analyze = () => act("analyze", () => request("/api/analyze", {}));
+  const reset = () => act("reset", async () => {
+    await request("/api/reset", {});
+    setAuthorized(false);
+  });
+  const exportReport = (format) => act(format, () => download(`/api/report?format=${format}`));
+
+  if (needsCode) {
+    return (
+      <div className="single">
+        <header className="app-header"><div className="brand"><span className="brand-mark"><Shield size={20} strokeWidth={2.2} /></span><span className="brand-copy"><strong>security<span>ops</span></strong><small>WEBSITE SECURITY ASSESSMENT</small></span></div></header>
+        <Card title="Access code" icon={LockKeyhole}>
+          <p className="muted">This hosted copy is private. Enter the access code from the owner.</p>
+          <form className="target-form" onSubmit={(event) => { event.preventDefault(); setAccessCode(code.trim()); setCode(""); refresh(); }}>
+            <input type="password" value={code} onChange={(e) => setCode(e.target.value)} aria-label="Access code" placeholder="Access code" autoFocus required />
+            <button className="btn primary">Unlock</button>
+          </form>
+        </Card>
+      </div>
+    );
   }
 
-  async function handlePlan(event) {
-    event.preventDefault();
-    setBusy("plan");
-    try {
-      await request("/api/plan", { goal });
-      await refresh();
-      showNotice("Plan ready. Review every command before approval.", "success");
-    } catch (error) {
-      showNotice(error.message, "error");
-    } finally {
-      setBusy("");
-    }
-  }
-
-  async function handleRun() {
-    if (!selectedSteps.length) return;
-    const steps = state?.plan?.steps.filter((step) => selectedSteps.includes(step.index)) ?? [];
-    const commandList = steps.map((step) => step.command).join("\n\n");
-    if (!window.confirm(`Approve and run ${steps.length} selected step(s)?\n\n${commandList}\n\nOnly proceed against targets you are authorized to assess.`)) {
-      return;
-    }
-    setBusy("run");
-    try {
-      await request("/api/run", { steps: selectedSteps });
-      await refresh();
-      showNotice("Approved steps are running in the background.", "success");
-    } catch (error) {
-      showNotice(error.message, "error");
-    } finally {
-      setBusy("");
-    }
-  }
-
-  async function handleCancel() {
-    setBusy("cancel");
-    try {
-      await request("/api/cancel", {});
-      await refresh();
-      showNotice("Cancellation requested. The current command will stop.", "info");
-    } catch (error) {
-      showNotice(error.message, "error");
-    } finally {
-      setBusy("");
-    }
-  }
-
-  function goTo(section) {
-    setActiveNav(section);
-    document.getElementById(section)?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }
-
-  const plan = state?.plan;
-  const project = state?.project;
-  const completeCount = state?.scans?.length ?? 0;
+  const running = state?.status === "running";
+  const scan = state?.scan;
+  const analysis = state?.analysis;
 
   return (
-    <div className="app-shell">
-      <aside className="sidebar">
-        <a className="brand" href="#workspace" onClick={(event) => { event.preventDefault(); goTo("workspace"); }}>
-          <span className="brand-mark"><Shield size={20} strokeWidth={2.2} /></span>
-          <span className="brand-copy"><strong>security<span>ops</span></strong><small>LOCAL WORKSPACE</small></span>
-        </a>
-        <div className="side-label">WORKSPACE</div>
-        <nav className="side-nav" aria-label="Workspace sections">
-          <button className={activeNav === "workspace" ? "active" : ""} onClick={() => goTo("workspace")}><Command size={17} />Overview</button>
-          <button className={activeNav === "engagement" ? "active" : ""} onClick={() => goTo("engagement")}><Globe2 size={17} />Engagement</button>
-          <button className={activeNav === "workflow" ? "active" : ""} onClick={() => goTo("workflow")}><ScanLine size={17} />Assessment plan</button>
-          <button className={activeNav === "activity" ? "active" : ""} onClick={() => goTo("activity")}><Activity size={17} />Activity &amp; history</button>
-        </nav>
-        <div className="sidebar-spacer" />
-        <div className="privacy-card">
-          <div className="privacy-icon"><LockKeyhole size={16} /></div>
-          <strong>Your data stays here</strong>
-          <p>Runs on this machine. Nothing is sent to a cloud service.</p>
+    <div className="single">
+      <header className="app-header">
+        <div className="brand"><span className="brand-mark"><Shield size={20} strokeWidth={2.2} /></span><span className="brand-copy"><strong>security<span>ops</span></strong><small>WEBSITE SECURITY ASSESSMENT</small></span></div>
+        <div className="header-pills">
+          <span className="pill"><Bot size={12} /> AI: {state?.provider ?? "…"}</span>
+          <span className="pill green"><LockKeyhole size={11} /> {state?.public ? "Private hosted copy" : "Runs locally"}</span>
         </div>
-        <div className="sidebar-footer"><span className="online-dot" />Loopback only <span>·</span> 127.0.0.1</div>
-      </aside>
+      </header>
 
-      <main className="main-content" id="workspace">
-        <header className="topbar">
-          <div className="breadcrumb"><span>SecurityOps</span><ChevronRight size={14} /><strong>Workspace</strong></div>
-          <div className="topbar-right">
-            <span className="local-pill"><span className="online-dot" />LOCAL ONLY</span>
-            <button className="icon-button" aria-label="Refresh state" onClick={refresh}><RefreshCw size={16} /></button>
-            <div className="avatar">SO</div>
+      {offline && <div className="alert">The local server is not responding. Start it with <code>python -m securityops</code>, then refresh.</div>}
+
+      <Card title="1. Information gathering" icon={Globe2} actions={scan && !running && <button className="btn ghost" onClick={reset} disabled={busy === "reset" || state?.analyzing}><RotateCcw size={14} />New assessment</button>}>
+        <form className="target-form" onSubmit={start}>
+          <input value={target} onChange={(e) => setTarget(e.target.value)} maxLength={300} placeholder={state?.public ? "example.com or https://example.com" : "example.com, https://example.com or 127.0.0.1:8080"} aria-label="Target domain" disabled={running} required />
+          <button className="btn primary" disabled={!authorized || !target.trim() || running || busy === "start"}>{running || busy === "start" ? <Spinner /> : <Play size={15} fill="currentColor" />}Start Assessment</button>
+        </form>
+        <label className="consent"><input type="checkbox" checked={authorized} onChange={(e) => setAuthorized(e.target.checked)} disabled={running} /><span>I own this target or have explicit permission to assess it. Only non-destructive checks are performed.</span></label>
+
+        {state?.steps?.length > 0 && (
+          <div className="progress" aria-live="polite">
+            <div className="progress-head"><strong>{running ? `Assessing ${state.target}…` : state.status === "error" ? "Assessment failed" : `Assessment of ${state.target} complete`}</strong><span>{state.steps.filter((s) => s.status === "done").length} / {state.steps.length}</span></div>
+            <div className="bar"><i style={{ width: `${(100 * state.steps.filter((s) => s.status === "done").length) / state.steps.length}%` }} /></div>
+            <ul className="steps">{state.steps.map((step) => <li key={step.name} className={step.status}><StepIcon status={step.status} />{step.name}</li>)}</ul>
           </div>
-        </header>
+        )}
+        {state?.error && <div className="alert">{state.error}</div>}
+      </Card>
 
-        {connectionError && <div className="connection-banner"><CircleHelp size={17} /><span><strong>Backend unavailable</strong> — {connectionError}. Start the SecurityOps local server, then refresh.</span><button onClick={refresh}><RefreshCw size={15} /> Retry</button></div>}
+      {scan && <Results scan={scan} />}
 
-        <section className="page-heading">
-          <div>
-            <div className="eyebrow"><span className="eyebrow-mark"><Command size={12} /></span> SECURITY ASSESSMENT WORKSPACE</div>
-            <h1>Good to see you<span className="heading-period">.</span></h1>
-            <p>Set your scope, build a reviewable plan, and stay in control at every step.</p>
+      {scan && (
+        <Card title="2. AI security analysis" icon={Bot} actions={<button className="btn primary" onClick={analyze} disabled={state.analyzing || busy === "analyze"}>{state.analyzing ? <Spinner /> : <Bot size={15} />}{analysis ? "Re-run AI Analysis" : "Run AI Analysis"}</button>}>
+          {state.analyzing && <p className="muted">Sending the collected results to {state.provider}. The model only receives text; it cannot run commands.</p>}
+          {!analysis && !state.analyzing && <p className="muted">The analysis interprets the results above, rates each finding, explains the evidence and recommends fixes.</p>}
+          {analysis && <AnalysisView analysis={analysis} />}
+        </Card>
+      )}
+
+      {scan && (
+        <Card title="3. Report" icon={FileText}>
+          <p className="muted">Includes target, date, scope, executive summary, findings with evidence and severity, remediation, and limitations. {analysis ? "" : "Run the AI analysis first for the full report; otherwise rule-based findings are used."}</p>
+          <div className="row">
+            <button className="btn primary" onClick={() => exportReport("html")} disabled={busy === "html"}>{busy === "html" ? <Spinner /> : <Download size={15} />}Export HTML Report</button>
+            <button className="btn" onClick={() => exportReport("pdf")} disabled={busy === "pdf"}>{busy === "pdf" ? <Spinner /> : <Download size={15} />}Export PDF</button>
+            {!state.public && <a className="btn ghost" href="/api/report?format=html&inline=1" target="_blank" rel="noreferrer"><Eye size={15} />Preview</a>}
           </div>
-          <div className="heading-status"><div className={`pulse ${state?.running ? "running" : ""}`} /><span>{state?.running ? "Assessment in progress" : "Workspace ready"}</span><span className="heading-divider" />Updated live</div>
-        </section>
+        </Card>
+      )}
 
-        <section className="metrics-grid" aria-label="Workspace summary">
-          <article className="metric-card"><div className="metric-icon blue"><Wrench size={18} /></div><div className="metric-top"><span>TOOLS AVAILABLE</span><ArrowUpRight size={15} /></div><div className="metric-value">{state ? installedTools.length : "—"}<small> / {state?.tools?.length ?? "—"}</small></div><div className="metric-foot">Detected on this machine</div></article>
-          <article className="metric-card"><div className="metric-icon green"><FileCheck2 size={18} /></div><div className="metric-top"><span>RECORDED RUNS</span><ArrowUpRight size={15} /></div><div className="metric-value">{completeCount.toString().padStart(2, "0")}</div><div className="metric-foot">Saved to the local audit history</div></article>
-          <article className="metric-card"><div className="metric-icon violet"><ShieldCheck size={18} /></div><div className="metric-top"><span>ACTIVE ENGAGEMENT</span><ArrowUpRight size={15} /></div><div className="metric-value metric-project">{project ? project.name : "Not set"}</div><div className="metric-foot">{project ? `In scope · ${project.target}` : "Create an authorized project to begin"}</div></article>
-        </section>
-
-        <section className="engagement-card section-anchor" id="engagement">
-          <div className="section-title-row">
-            <div className="section-title-icon"><Globe2 size={18} /></div>
-            <div><div className="section-kicker">STEP 01 <span>·</span> ENGAGEMENT</div><h2>{project ? "Current engagement" : "Set up your engagement"}</h2></div>
-            {project && <span className="scope-tag"><ShieldCheck size={13} /> Authorized · In scope</span>}
-          </div>
-          {project ? (
-            <div className="active-project">
-              <div className="project-target-icon"><Globe2 size={19} /></div>
-              <div className="project-details"><strong>{project.name}</strong><span>{project.target}</span></div>
-              <div className="project-state"><span className="online-dot" />Scope verified</div>
-              <div className="project-shield"><ShieldCheck size={19} /></div>
-            </div>
-          ) : (
-            <form onSubmit={handleProject}>
-              <div className="form-grid">
-                <label>Project name<input value={projectName} onChange={(event) => setProjectName(event.target.value)} maxLength={120} required placeholder="e.g. Internal web assessment" /></label>
-                <label>Authorized target<input value={target} onChange={(event) => setTarget(event.target.value)} maxLength={500} required placeholder="https://example.com or 192.0.2.10" /></label>
-              </div>
-              <label className="consent-row"><input type="checkbox" checked={authorized} onChange={(event) => setAuthorized(event.target.checked)} required /><span>I own this target or have explicit written permission to assess it.</span></label>
-              <div className="form-actions"><span className="form-hint"><LockKeyhole size={13} /> Target is stored locally and must remain in scope.</span><button className="button-primary" disabled={busy === "project" || !authorized}>{busy === "project" ? <LoaderCircle className="spin" size={16} /> : <ShieldCheck size={16} />}Save authorized project<ArrowUpRight size={14} /></button></div>
-            </form>
-          )}
-        </section>
-
-        <div className="workspace-grid">
-          <section className="panel section-anchor" id="workflow">
-            <div className="panel-header">
-              <div className="section-title-icon blue"><ScanLine size={18} /></div>
-              <div className="panel-heading"><div className="section-kicker">STEP 02 <span>·</span> PLAN &amp; REVIEW</div><h2>Assessment workflow</h2><p>Commands are proposed for review. Nothing runs without approval.</p></div>
-            </div>
-            {!plan && (
-              <form className="goal-form" onSubmit={handlePlan}>
-                <label htmlFor="goal">What do you want to assess?</label>
-                <textarea id="goal" value={goal} onChange={(event) => setGoal(event.target.value)} maxLength={2000} required disabled={!project || state?.running} placeholder="Describe an authorized, non-destructive assessment goal…" />
-                <div className="goal-footer"><span><LockKeyhole size={13} /> Local planning · harmful requests are refused</span><button className="button-primary" disabled={!project || state?.running || busy === "plan" || !goal.trim()}>{busy === "plan" ? <LoaderCircle className="spin" size={16} /> : <Command size={16} />}Generate plan<ChevronRight size={15} /></button></div>
-              </form>
-            )}
-            {plan && (
-              <div className="plan-content">
-                {plan.refused ? (
-                  <div className="refusal"><Shield size={19} /><div><strong>Request not accepted</strong><p>{plan.refusal_reason}</p></div></div>
-                ) : (
-                  <>
-                    <div className="plan-summary"><div className="summary-icon"><CheckCircle2 size={17} /></div><div><strong>Plan ready for your review</strong><p>{plan.summary}</p></div><button className="text-button" onClick={() => { setGoal(""); setSelectedSteps([]); setState((current) => current ? { ...current, plan: null } : current); }}>New plan</button></div>
-                    <div className="step-list">
-                      {plan.steps.map((step) => (
-                        <article className={`workflow-step ${step.status.toLowerCase()}`} key={step.index}>
-                          <div className="step-header">
-                            <label className="step-select" aria-label={`Approve ${step.title}`}>
-                              <input type="checkbox" checked={selectedSteps.includes(step.index)} disabled={state?.running || step.status !== "Pending"} onChange={(event) => setSelectedSteps((current) => event.target.checked ? [...current, step.index] : current.filter((index) => index !== step.index))} />
-                              <span className="custom-check"><Check size={12} /></span>
-                            </label>
-                            <div className="step-number">{String(step.index + 1).padStart(2, "0")}</div>
-                            <div className="step-name"><strong>{step.title}</strong><span>{step.rationale}</span></div>
-                            <StatusBadge status={step.status} />
-                          </div>
-                          <div className="command-box"><Terminal size={14} /><code>{step.command}</code><span>REVIEW COMMAND</span></div>
-                          {step.warning && <div className="step-warning"><CircleHelp size={14} />{step.warning}</div>}
-                          {step.output && <pre className="step-output">{step.output.slice(-1800)}</pre>}
-                        </article>
-                      ))}
-                    </div>
-                    {plan.steps.length === 0 && <div className="empty-plan"><Wrench size={19} /><span>No suitable installed tools were found for this plan.</span></div>}
-                    {!state?.running && pendingSteps.length > 0 && <div className="run-controls"><span><LockKeyhole size={13} /> {selectedSteps.length} of {pendingSteps.length} steps selected</span><button className="button-primary" onClick={handleRun} disabled={!selectedSteps.length || busy === "run"}>{busy === "run" ? <LoaderCircle className="spin" size={16} /> : <Play size={15} fill="currentColor" />}Approve &amp; run<ArrowUpRight size={14} /></button></div>}
-                    {state?.running && <div className="running-banner"><div className="pulse running" /><span>Workflow is running in the background. Output updates live.</span><button className="button-danger" onClick={handleCancel} disabled={busy === "cancel"}>{busy === "cancel" ? <LoaderCircle className="spin" size={15} /> : <Square size={13} fill="currentColor" />}Stop run</button></div>}
-                    {plan.steps.length > 0 && pendingSteps.length === 0 && !state?.running && <div className="complete-banner"><CheckCircle2 size={16} />All planned steps have finished. Review the saved activity below.</div>}
-                  </>
-                )}
-              </div>
-            )}
-          </section>
-
-          <aside className="right-column">
-            <section className="panel tools-panel">
-              <div className="small-panel-header"><div className="section-title-icon green"><Wrench size={17} /></div><div><h2>Tool inventory</h2><p>{installedTools.length} detected · {state?.tools?.length ?? 0} in catalog</p></div><ArrowDown size={15} /></div>
-              <div className="tool-list">{state?.tools?.map((tool) => <div className={`tool-row ${tool.installed ? "" : "unavailable"}`} key={tool.key}><span className={`tool-icon ${tool.installed ? "available" : ""}`}><Wrench size={14} /></span><span className="tool-name">{tool.name}<small>{tool.category}</small></span><span className="tool-state">{tool.installed ? "Ready" : "Missing"}</span></div>)}</div>
-              <div className="panel-footnote"><LockKeyhole size={12} />Interactive tools are excluded from automated plans.</div>
-            </section>
-            <section className="panel activity-panel section-anchor" id="activity">
-              <div className="small-panel-header"><div className="section-title-icon violet"><Activity size={17} /></div><div><h2>Live activity</h2><p>{state?.running ? "Streaming current workflow" : "Recent local activity"}</p></div><span className={`activity-indicator ${state?.running ? "live" : ""}`} /></div>
-              <div className="activity-feed">{state?.log?.length ? state.log.slice(-14).map((line, index) => <div className="activity-line" key={`${index}-${line}`}><span className="activity-bullet" /><span>{line}</span></div>) : <div className="activity-empty"><Radio size={18} /><span>When a workflow runs, live output will appear here.</span></div>}</div>
-              <div className="small-panel-header history-heading"><div className="section-title-icon amber"><Clock3 size={16} /></div><div><h2>Run history</h2><p>Saved to this machine</p></div></div>
-              <div className="history-list">{state?.scans?.length ? state.scans.map((scan, index) => <div className="history-row" key={`${scan.tool}-${index}`}><div className="history-icon"><Terminal size={14} /></div><div className="history-copy"><strong>{scan.tool}</strong><span title={scan.command}>{scan.command}</span></div><StatusBadge status={scan.status} /></div>) : <div className="history-empty"><Clock3 size={16} />No runs recorded yet.</div>}</div>
-            </section>
-          </aside>
-        </div>
-        <footer className="page-footer"><span><ShieldCheck size={14} /> Authorized assessments only</span><span>All activity is local <span className="footer-dot">·</span> Commands are reviewed before execution</span></footer>
-      </main>
-      {notice && <div className={`toast ${notice.kind}`} role="status"><span>{notice.kind === "error" ? <X size={16} /> : <CheckCircle2 size={16} />}</span>{notice.message}<button aria-label="Dismiss notification" onClick={() => setNotice(null)}><X size={15} /></button></div>}
+      <footer className="foot">For authorized, non-destructive assessment only · nothing runs without your confirmation</footer>
+      {notice && <div className={`toast ${notice.kind}`} role="status"><AlertTriangle size={16} />{notice.text}<button aria-label="Dismiss" onClick={() => setNotice(null)}><X size={14} /></button></div>}
     </div>
+  );
+}
+
+function Results({ scan }) {
+  const headers = scan.headers.filter((h) => h.applicable);
+  return (
+    <Card title="Results" icon={CheckCircle2}>
+      <p className="summary">{scan.summary}</p>
+      <div className="grid">
+        <div className="block">
+          <h3>DNS records</h3>
+          {Object.keys(scan.dns).length ? (
+            <table><tbody>{Object.entries(scan.dns).map(([type, values]) => <tr key={type}><th>{type}</th><td><code>{values.join(", ")}</code></td></tr>)}</tbody></table>
+          ) : <p className="muted">No DNS records found.</p>}
+        </div>
+        <div className="block">
+          <h3>HTTP / HTTPS</h3>
+          {Object.keys(scan.http).length ? (
+            <table><tbody>{Object.entries(scan.http).map(([scheme, r]) => <tr key={scheme}><th>{scheme.toUpperCase()}</th><td><strong>{r.status} {r.reason}</strong> · {r.response_ms} ms<br /><code>{r.final_url}</code>{r.title && <><br /><span className="muted">“{r.title}”</span></>}</td></tr>)}</tbody></table>
+          ) : <p className="muted">No web server responded.</p>}
+        </div>
+        <div className="block">
+          <h3>TLS certificate</h3>
+          {scan.tls.valid ? (
+            <table><tbody>
+              <tr><th>Issuer</th><td>{scan.tls.issuer}</td></tr>
+              <tr><th>Subject</th><td>{scan.tls.subject}</td></tr>
+              <tr><th>Expires</th><td className={scan.tls.days_remaining < 30 ? "bad" : ""}>{scan.tls.not_after} ({scan.tls.days_remaining} days)</td></tr>
+              <tr><th>Protocol</th><td>{scan.tls.protocol}</td></tr>
+            </tbody></table>
+          ) : <p className="bad">{scan.tls.error || "Not checked."}</p>}
+        </div>
+        <div className="block">
+          <h3>Technologies</h3>
+          {scan.technologies.length ? (
+            <table><tbody>{scan.technologies.map((t) => <tr key={t.name}><th>{t.name}</th><td className="muted">{t.evidence}</td></tr>)}</tbody></table>
+          ) : <p className="muted">No technology hints observed.</p>}
+        </div>
+        <div className="block wide">
+          <h3>Security headers</h3>
+          {headers.length ? (
+            <table><tbody>{headers.map((h) => <tr key={h.name}><th>{h.name}</th><td>{h.present ? <span className="ok">Present</span> : <span className="bad">Missing</span>}{h.value && <> · <code>{h.value}</code></>}<br /><span className="muted">{h.purpose}</span></td></tr>)}</tbody></table>
+          ) : <p className="muted">Not checked (no web response).</p>}
+        </div>
+      </div>
+      {scan.errors.length > 0 && <div className="note">Some checks could not complete: {scan.errors.join("; ")}</div>}
+    </Card>
+  );
+}
+
+function AnalysisView({ analysis }) {
+  return (
+    <>
+      {analysis.error && <div className="note">{analysis.error}</div>}
+      <div className="exec"><span className="tag">{analysis.source === "ai" ? `AI · ${analysis.provider}` : "Rule-based"}</span><p>{analysis.executive_summary}</p></div>
+      <p className="legend"><strong>Confirmed</strong> = directly observed in the evidence. <strong>Potential risk</strong> = inferred, verify manually.</p>
+      <div className="findings">
+        {analysis.findings.length === 0 && <p className="muted">No issues were identified in the areas checked.</p>}
+        {analysis.findings.map((f) => (
+          <article key={f.id} className={`finding ${f.severity.toLowerCase()}`}>
+            <div className="finding-head"><span className={`sev ${f.severity.toLowerCase()}`}>{f.severity}</span><strong>{f.title}</strong><span className={`status ${f.status === "Confirmed" ? "confirmed" : "potential"}`}>{f.status}</span></div>
+            <dl>
+              <dt>Evidence</dt><dd><code>{f.evidence}</code></dd>
+              <dt>Why it matters</dt><dd>{f.why_it_matters}</dd>
+              <dt>Remediation</dt><dd>{f.remediation}</dd>
+            </dl>
+          </article>
+        ))}
+      </div>
+    </>
   );
 }
 
