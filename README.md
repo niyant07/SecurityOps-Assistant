@@ -1,10 +1,11 @@
 # SecurityOps Assistant
 
-An **offline, local-only** desktop application for **authorized** security
-assessments, built for Kali Linux. It provides project management, an asset /
-scope inventory, a Kali tool launcher, scan history, evidence collection, an
-offline knowledge-base "AI" assistant, and professional HTML/PDF/Markdown
-report generation — all running entirely on your machine with **no cloud
+An **offline, local-only** application for **authorized** security assessments,
+built for Kali Linux. Its default interface is a polished browser workspace
+served at `127.0.0.1`; an optional PySide desktop UI is also available. It
+provides project management, an asset/scope inventory, scan history, evidence
+collection, an offline knowledge-base assistant, and professional
+HTML/PDF/Markdown reports — all running on your machine with **no cloud
 services**.
 
 > ⚖️ **Authorized use only.** This tool is designed exclusively for security
@@ -35,6 +36,7 @@ keeps data private.
 
 | Area | Capability |
 |------|-----------|
+| **Dashboard** | Live overview of saved projects, assets, findings, recent scans, and detected tools |
 | **Quick Scan** | Paste a link → confirm authorization → one click → vulnerability report, downloaded automatically |
 | **AI Workflow** | Plain-English goal → reviewable plan → approve → background run → findings → plain-English explanation |
 | **AI Bug Bounty** | Import & validate engagement scope, build a target-type methodology, run in-scope-only steps, report with reproduction steps |
@@ -150,14 +152,28 @@ securityops/
 └── tests/         Unit tests (pytest)
 ```
 
-The application is layered: the **core** knows nothing about the GUI, the
-**GUI** talks to core services, and **plugins** extend the GUI through a stable
-registration API. This keeps the codebase modular and testable.
+### Run the local web UI
+
+The default `python -m securityops` command starts the local browser interface
+and opens it at
+`http://127.0.0.1:8765` by default; use `--no-browser` to suppress automatic
+browser launch or `--port 9000` to choose another port. The server refuses
+non-loopback bind addresses. Create an authorized project, generate a plan,
+review its exact commands, and explicitly approve the steps you want to run.
+Project, scan, and workflow data use the same local database as the optional
+desktop app. `python -m securityops.web` and the `securityops-web` command are
+equivalent launchers. To use the PySide desktop UI instead, run
+`python -m securityops.desktop` (or `securityops-desktop` after installation).
+
+The browser UI is built with React and Vite. Its compiled bundle is included
+with the Python package; Node.js is only needed when developing or rebuilding
+the frontend.
 
 ## Requirements
 
 - **Python 3.12+**
 - **PySide6 6.6+**
+- **Node.js 20+ and npm** (frontend development/build only; not required to run)
 - Linux (Kali) recommended for full tool integration; the core and reporting
   layers are cross-platform.
 
@@ -195,6 +211,23 @@ python -m pip install -r requirements.txt
 ```bash
 python -m securityops
 ```
+
+For frontend development, install Node.js 20+ and run these in separate
+terminals from the repository root:
+
+```powershell
+# Terminal 1: Python API on loopback
+python -m securityops.web --no-browser
+
+# Terminal 2: React development server
+cd web-ui
+npm ci
+npm run dev
+```
+
+Open the Vite URL (usually `http://127.0.0.1:5173`). After making frontend
+changes, run `npm run build` from `web-ui/` to refresh the bundled UI used by
+`python -m securityops`.
 
 On first launch the app creates its data directory at
 `~/.local/share/securityops/` (database, logs, evidence) and a config file at

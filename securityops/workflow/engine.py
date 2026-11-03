@@ -44,6 +44,7 @@ class WorkflowEngine(QObject):
         self._runner: CommandRunner | None = None
         self._buffer: list[str] = []
         self._cancelled = False
+        self._scan_records: dict[int, Scan] = {}
 
     # ------------------------------------------------------------------ #
     # Control
@@ -60,6 +61,7 @@ class WorkflowEngine(QObject):
         self._project_id = project_id
         self._index = -1
         self._cancelled = False
+        self._scan_records.clear()
         # Steps not explicitly approved are treated as skipped.
         for step in plan.steps:
             if step.status == StepStatus.PENDING:
@@ -94,13 +96,14 @@ class WorkflowEngine(QObject):
 
     def _start_step(self, index: int, step: WorkflowStep) -> None:
         step.status = StepStatus.RUNNING
-        step.started_at = datetime.now(timezone.utc)
+        step.started_at = datetime.now(timezone.utc)  # noqa: UP017
         self._buffer = []
         argv = self._ctx.tools.split_command(step.command)
         if not argv:
-            self._fail_step(step, "Empty command")
+            self._fail_step(index, step, "Empty command")
             return
 
+        self._persist(index, step)
         _AUDIT.info("EXEC step=%d tool=%s cmd=%r", index, step.tool_key, step.command)
         self.audit.emit(f"$ {step.command}")
         self.step_started.emit(index)
@@ -124,9 +127,9 @@ class WorkflowEngine(QObject):
         step.output = "".join(self._buffer)[:500_000]
         step.exit_code = code
         step.status = StepStatus.COMPLETED if code == 0 else StepStatus.FAILED
-        step.finished_at = datetime.now(timezone.utc)
+        step.finished_at = datetime.now(timezone.utc)  # noqa: UP017
         step.findings = parsers.extract_findings(step.tool_key, step.output)
-        self._persist(step)
+        self._persist(index, step)
         _AUDIT.info("DONE step=%d exit=%d findings=%d", index, code, len(step.findings))
         self.step_finished.emit(index)
         self._advance()
@@ -134,38 +137,54 @@ class WorkflowEngine(QObject):
     def _on_failed(self, index: int, message: str) -> None:
         assert self._plan is not None
         step = self._plan.steps[index]
-        self._fail_step(step, message)
+        self._fail_step(index, step, message)
         self.step_finished.emit(index)
         self._advance()
 
-    def _fail_step(self, step: WorkflowStep, message: str) -> None:
+    def _fail_step(self, index: int, step: WorkflowStep, message: str) -> None:
         step.status = StepStatus.FAILED
         step.output = (step.output + f"\n[failed: {message}]").strip()
-        step.finished_at = datetime.now(timezone.utc)
-        self._persist(step)
+        step.finished_at = datetime.now(timezone.utc)  # noqa: UP017
+        self._persist(index, step)
         _AUDIT.warning("FAIL step tool=%s: %s", step.tool_key, message)
 
     # ------------------------------------------------------------------ #
     # Persistence / completion
     # ------------------------------------------------------------------ #
-    def _persist(self, step: WorkflowStep) -> None:
+    def _persist(self, index: int, step: WorkflowStep) -> None:
         if self._project_id is None:
             return
-        status = (ScanStatus.COMPLETED if step.status == StepStatus.COMPLETED
-                  else ScanStatus.FAILED)
-        scan = Scan(
-            project_id=self._project_id,
-            tool=step.tool_key,
-            command=step.command,
-            target=step.target,
-            status=status,
-            output=step.output,
-            exit_code=step.exit_code,
-            started_at=step.started_at,
-            finished_at=step.finished_at,
-        )
+        status_by_step = {
+            StepStatus.RUNNING: ScanStatus.RUNNING,
+            StepStatus.COMPLETED: ScanStatus.COMPLETED,
+            StepStatus.FAILED: ScanStatus.FAILED,
+        }
+        status = status_by_step.get(step.status, ScanStatus.FAILED)
+        scan = self._scan_records.get(index)
+        if scan is None:
+            scan = Scan(
+                project_id=self._project_id,
+                tool=step.tool_key,
+                command=step.command,
+                target=step.target,
+                status=status,
+                output=step.output,
+                exit_code=step.exit_code,
+                started_at=step.started_at,
+                finished_at=step.finished_at,
+            )
+        else:
+            scan.status = status
+            scan.output = step.output
+            scan.exit_code = step.exit_code
+            scan.started_at = step.started_at
+            scan.finished_at = step.finished_at
         try:
-            self._ctx.database.scans.create(scan)
+            if scan.id is None:
+                self._ctx.database.scans.create(scan)
+                self._scan_records[index] = scan
+            else:
+                self._ctx.database.scans.update(scan)
         except Exception:  # noqa: BLE001 - persistence must not crash a run
             _LOG.exception("Failed to persist scan for step %s", step.tool_key)
 

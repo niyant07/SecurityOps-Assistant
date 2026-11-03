@@ -29,13 +29,15 @@ dev = [
 
 [project.scripts]
 securityops = "securityops.__main__:main"
+securityops-web = "securityops.web:main"
+securityops-desktop = "securityops.desktop:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["securityops*"]
 
 [tool.setuptools.package-data]
-securityops = ["config/*.yaml", "reporting/templates/*.html", "gui/resources/*.qss"]
+securityops = ["config/*.yaml", "reporting/templates/*.html", "gui/resources/*.qss", "web/dist/*", "web/dist/assets/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

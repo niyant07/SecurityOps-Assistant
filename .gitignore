@@ -8,6 +8,12 @@ dist/
 .venv/
 venv/
 env/
+node_modules/
+.vite/
+
+# Bundled browser UI is shipped with the Python package.
+!securityops/web/dist/
+!securityops/web/dist/**
 
 # Test / type / lint caches
 .pytest_cache/
@@ -29,4 +35,3 @@ reports/
 .DS_Store
 Thumbs.db
 ~$*
-

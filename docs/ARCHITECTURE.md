@@ -1,11 +1,13 @@
 # Architecture
 
-SecurityOps Assistant is a layered, plugin-driven desktop application. The
-guiding rule is **dependencies point downward only**:
+SecurityOps Assistant is a layered, plugin-driven application. Its browser
+interface is served on loopback by the Python workflow API, with a React/Vite
+frontend built from `web-ui/`. The optional PySide desktop frontend remains
+available. The guiding rule is **dependencies point downward only**:
 
 ```
         ┌─────────────────────────────────────────────┐
-        │                    gui/                      │  PySide6 windows, theme
+        │              web-ui/ and gui/                 │  React browser / PySide desktop
         └───────────────┬─────────────────────────────┘
                         │ uses AppContext
         ┌───────────────▼─────────────────────────────┐
@@ -24,7 +26,24 @@ guiding rule is **dependencies point downward only**:
 The **core** layer never imports `gui`, so it can be exercised headlessly
 (`pytest` runs the whole core, models, ai, and reporting layers without Qt).
 
+ ### Browser frontend
+ `web-ui/` contains the React/Vite source. `npm run build` writes the production
+ bundle to `securityops/web/dist/`, which is served by `securityops.web` from
+ the loopback-only Python server. Node.js is needed to develop or rebuild the
+ frontend, not to run an installed application. During development, run the
+ Python API on port 8765 and use `npm run dev`; Vite proxies `/api` requests to
+ that local server. `python -m securityops` launches the browser UI, while
+ `python -m securityops.desktop` launches the optional PySide interface.
+
 ## Key components
+
+### Dashboard module
+The Dashboard tab is a plugin in `plugins/dashboard.py`. Its read-only
+`dashboard.DashboardService` aggregates the existing project, asset, finding,
+and scan repositories into a snapshot; the widget renders that data and offers
+navigation to existing feature tabs. It refreshes on demand and every five
+seconds. It intentionally does not display reports or audit events because
+those are not currently persisted as queryable dashboard records.
 
 ### `core.context.AppContext`
 The single dependency-injection seam. It bundles the long-lived services

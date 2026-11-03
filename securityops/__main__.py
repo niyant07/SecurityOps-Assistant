@@ -6,10 +6,10 @@ import sys
 
 
 def main() -> int:
-    """Run the GUI application."""
-    from .app import run
+    """Run the local browser application."""
+    from .web import main as web_main
 
-    return run()
+    return web_main()
 
 
 if __name__ == "__main__":
