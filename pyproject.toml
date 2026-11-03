@@ -5,9 +5,9 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "securityops-assistant"
 version = "0.1.0"
-description = "Offline, local-only desktop assistant for authorized security assessments on Kali Linux."
+description = "AI-assisted, non-destructive website security assessment tool for authorized targets."
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [{ name = "SecurityOps" }]
 keywords = ["security", "pentest", "kali", "offline", "assessment"]
@@ -16,10 +16,12 @@ dependencies = [
     "PySide6>=6.6",
     "PyYAML>=6.0",
     "Jinja2>=3.1",
+    "dnspython>=2.4",
     "weasyprint>=60; platform_system == 'Linux'",
 ]
 
 [project.optional-dependencies]
+ai = ["anthropic>=0.88"]
 dev = [
     "pytest>=8.0",
     "pytest-qt>=4.4",
@@ -45,11 +47,11 @@ python_files = ["test_*.py"]
 addopts = "-q"
 
 [tool.mypy]
-python_version = "3.12"
+python_version = "3.10"
 warn_unused_ignores = true
 disallow_untyped_defs = true
 ignore_missing_imports = true
 
 [tool.ruff]
 line-length = 100
-target-version = "py312"
+target-version = "py310"

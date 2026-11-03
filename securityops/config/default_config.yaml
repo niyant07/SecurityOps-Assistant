@@ -37,13 +37,28 @@ assistant:
   # The offline assistant is a static knowledge base — no network access.
   enabled: true
 
+assessment:
+  # Seconds to wait for each DNS/HTTP/TLS request.
+  timeout_seconds: 8
+  # Optional allow-list. When empty, any target you confirm you are authorized to
+  # assess is accepted. Entries may be hosts, *.wildcards, IPs or CIDR ranges.
+  allowed_targets: []
+  # Targets that must never be assessed. These always win over allowed_targets.
+  blocked_targets: []
+
 llm:
-  # Optional local LLM (Ollama) for the AI Workflow tab. Fully local — talks only
-  # to a server on your own machine. If disabled or unreachable, the workflow
-  # planner and explainer fall back to deterministic rules and still work.
+  # AI Security Analysis provider:
+  #   ollama    — a local model (default; nothing leaves your machine)
+  #   anthropic — Claude via the Anthropic API; set the ANTHROPIC_API_KEY
+  #               environment variable (keys are never stored in this file)
+  #   none      — rule-based analysis only
+  # If the provider is unreachable, the app still shows the scan results and a
+  # rule-based analysis with a clear message.
   enabled: true
+  provider: "ollama"
   host: "http://localhost:11434"
   model: "llama3"
+  api_model: "claude-opus-5-5"
 
 rag:
   # 100% local RAG engine (Retrieval-Augmented Generation).

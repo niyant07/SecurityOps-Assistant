@@ -35,6 +35,17 @@ _DEFAULT_WORDLIST = "/usr/share/wordlists/dirb/common.txt"
 _MANUAL_ONLY = {"burpsuite", "wireshark", "metasploit", "hashcat", "hydra",
                 "john", "aircrack", "airmon", "airodump", "aireplay"}
 
+# Install-free built-in checks that stand in for a Kali tool that is missing, so
+# a plan still covers the same ground on machines without Kali (e.g. Windows).
+BUILTIN_FALLBACK = {
+    "nmap": "sops-ports", "naabu": "sops-ports",
+    "httpx": "sops-http", "whatweb": "sops-http",
+    "nikto": "sops-headers",
+    "subfinder": "sops-dns", "amass": "sops-dns", "dnsrecon": "sops-dns",
+    "theharvester": "sops-dns",
+    "gobuster": "sops-paths", "ffuf": "sops-paths", "dirsearch": "sops-paths",
+}
+
 # Steps built from these tools carry a disruptive-operation warning.
 _DISRUPTIVE = {
     "sqlmap": "Active injection testing — only run against parameters you are "
@@ -77,6 +88,9 @@ class Intent:
 
 # Order matters: earlier intents are placed earlier in the plan.
 _INTENTS: tuple[Intent, ...] = (
+    Intent("dns",
+           re.compile(r"\b(dns|resolv|ip address|lookup)\w*", re.I),
+           ("sops-dns",)),
     Intent("subdomains",
            re.compile(r"\b(subdomain|sub-domain|attack surface|dns enum|osint|harvest"
                       r"|email address)\w*", re.I),
@@ -96,7 +110,13 @@ _INTENTS: tuple[Intent, ...] = (
     Intent("web_vuln",
            re.compile(r"\b(web vuln|nikto|misconfig|security header|outdated software"
                       r"|vulnerab)\w*", re.I),
-           ("nikto",)),
+           ("nikto", "sops-tls")),
+    Intent("tls",
+           re.compile(r"\b(tls|ssl|certificat|https config)\w*", re.I),
+           ("sops-tls",)),
+    Intent("security_contact",
+           re.compile(r"security\.txt|disclosure contact|security contact", re.I),
+           ("sops-securitytxt",)),
     Intent("sql_injection",
            re.compile(r"\b(sql inject|sqli|database (?:vuln|inject))\w*", re.I),
            ("sqlmap",)),
@@ -107,7 +127,7 @@ _INTENTS: tuple[Intent, ...] = (
 
 # When a goal is generic ("assess my website", "check my server"), use a sensible
 # default recon+enum chain.
-_DEFAULT_WEB_CHAIN = ("nmap", "whatweb", "nikto")
+_DEFAULT_WEB_CHAIN = ("nmap", "whatweb", "nikto", "sops-tls")
 _DEFAULT_HOST_CHAIN = ("nmap",)
 
 _GENERIC = re.compile(r"\b(assess|audit|check|test|analyz|review|look at|security of)\w*", re.I)
@@ -217,24 +237,37 @@ class RuleBasedPlanner:
 
         steps: list[WorkflowStep] = []
         skipped_missing: list[str] = []
+        substituted: list[str] = []
+        used: set[str] = set()
         for key in tool_keys:
             detected = self._tools.get(key)
             if detected is None:
                 continue
             if not detected.installed:
-                skipped_missing.append(detected.spec.name)
+                fallback = self._tools.get(BUILTIN_FALLBACK.get(key, ""))
+                if fallback is None or not fallback.installed:
+                    skipped_missing.append(detected.spec.name)
+                    continue
+                substituted.append(detected.spec.name)
+                key = fallback.spec.key
+            if key in used:
                 continue
+            used.add(key)
             step = self._build_step(key, target, goal)
             if step is not None:
                 steps.append(step)
 
         summary = self._summarize(target, steps, skipped_missing, source)
+        if substituted:
+            summary += (f" Built-in checks stand in for tools that are not installed: "
+                        f"{', '.join(dict.fromkeys(substituted))}.")
         return WorkflowPlan(goal=goal, summary=summary, steps=steps, source=source)
 
     def _build_step(self, key: str, target: Target, goal: str) -> WorkflowStep | None:
         spec = self._tools.get(key).spec  # type: ignore[union-attr]
         # Web tools want the URL; network tools want the host/IP.
-        if key in {"httpx", "whatweb", "nikto", "gobuster", "ffuf", "dirsearch", "sqlmap"}:
+        if key in {"httpx", "whatweb", "nikto", "gobuster", "ffuf", "dirsearch", "sqlmap",
+                   "sops-http", "sops-headers", "sops-paths", "sops-tls"}:
             cmd_target = target.raw if target.is_url else f"http://{_host_only(target)}"
         else:
             cmd_target = _host_only(target)
@@ -272,6 +305,13 @@ class RuleBasedPlanner:
             "nikto": "Check the web server for known issues and misconfigurations.",
             "sqlmap": "Test for SQL injection on authorized parameters.",
             "searchsploit": "Search the offline Exploit-DB for matching known exploits.",
+            "sops-dns": "Resolve the target's addresses and reverse DNS names.",
+            "sops-ports": "Find which common service ports are open.",
+            "sops-http": "Fingerprint the web server, frameworks and CMS.",
+            "sops-headers": "Check security headers, cookie flags and HTTPS redirect.",
+            "sops-tls": "Validate the TLS certificate and negotiated protocol.",
+            "sops-paths": "Look for exposed sensitive files and admin panels.",
+            "sops-securitytxt": "Find the published security contact (security.txt).",
         }.get(key)
         return intro or description
 
@@ -352,6 +392,13 @@ class LLMPlanner:
             return []
         allowed_set = set(allowed)
         return [k for k in raw if isinstance(k, str) and k in allowed_set]
+
+
+def available_tool_keys(tools: ToolRegistry) -> set[str]:
+    """Tool keys a plan can use: installed tools plus those a built-in stands in for."""
+    installed = {d.spec.key for d in tools.installed()}
+    return installed | {key for key, fallback in BUILTIN_FALLBACK.items()
+                        if fallback in installed}
 
 
 def _looks_web(goal: str) -> bool:

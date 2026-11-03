@@ -8,7 +8,10 @@ content (counts, severities) always comes from the curated findings.
 
 from __future__ import annotations
 
+import email.message
 from dataclasses import dataclass
+from datetime import datetime
+from pathlib import Path
 
 from ..core.logging_config import get_logger
 from ..models import Severity
@@ -24,6 +27,22 @@ class DisclosureEmail:
     recipient: str
     subject: str
     body: str
+
+
+def write_eml_draft(recipient: str, subject: str, body: str, report_path: str,
+                    out_dir: Path) -> Path:
+    """Save the email as an ``.eml`` draft for the analyst to send themselves."""
+    message = email.message.EmailMessage()
+    message["To"] = recipient
+    message["Subject"] = subject
+    if report_path:
+        body += f"\n\n[Attach the report before sending: {report_path}]"
+    message.set_content(body)
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    out = out_dir / f"disclosure_draft_{stamp}.eml"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_bytes(bytes(message))
+    return out
 
 
 def build_disclosure_email(

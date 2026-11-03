@@ -34,7 +34,7 @@ for candidate in python3.12 python3.13 python3; do
 done
 
 if [[ -z "$PYTHON_BIN" ]]; then
-    error "No python3 interpreter found. Install Python 3.12+ and re-run."
+    error "No python3 interpreter found. Install Python 3.10+ and re-run."
     exit 1
 fi
 

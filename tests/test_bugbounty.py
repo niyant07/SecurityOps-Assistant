@@ -155,3 +155,9 @@ def test_recommend_next_advances_phases(bb_planner: BugBountyPlanner) -> None:
     scope = _web_scope()
     rec = bb_planner.recommend_next(scope, ["subfinder", "amass", "dnsrecon"])
     assert "Enumeration" in rec or "nmap" in rec
+
+
+def test_bare_wildcard_lines_keep_their_asterisk() -> None:
+    scope = parse_scope_text("*.example.com\n* api.example.org\n• 10.0.0.0/24")
+    assert scope.in_scope == ["*.example.com", "api.example.org", "10.0.0.0/24"]
+    assert ScopeValidator(scope).is_in_scope("shop.example.com")

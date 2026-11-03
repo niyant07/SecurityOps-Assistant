@@ -41,19 +41,16 @@ from PySide6.QtWidgets import (
 from ..bugbounty.planner import BugBountyPlanner
 from ..bugbounty.report import BugBountyReportBundle, BugBountyReportGenerator
 from ..bugbounty.scope import Scope, TargetType, parse_scope_text
+from ..bugbounty.store import load_scope, persist_scope
 from ..bugbounty.triage import Candidate, triage_findings
 from ..core import paths
 from ..core.plugins import PluginBase, PluginMeta
 from ..gui import widgets
-from ..models import Asset, AssetType, ScopeState
 from ..workflow.engine import WorkflowEngine
 from ..workflow.explain import Explainer
 from ..workflow.plan import StepStatus, WorkflowPlan
 from ..reporting import ReportFormat
 from .workflow_chat import StepRow
-
-_NOTES_HEADER = "# Bug Bounty Engagement"
-
 
 class TriageDialog(QDialog):
     """Review auto-triaged candidate issues and choose which to promote to Findings."""
@@ -266,59 +263,12 @@ class BugBountyWidget(QWidget):
 
     def _persist_scope(self, project_id: int, scope: Scope) -> None:
         """Save scope assets to the shared assets table and metadata to scope_notes."""
-        db = self._ctx.database
-        existing = {a.identifier for a in db.assets.list_for_project(project_id)}
-        for ident in scope.in_scope:
-            if ident not in existing:
-                db.assets.create(Asset(project_id=project_id, identifier=ident,
-                                       asset_type=self._asset_type(scope.target_type),
-                                       scope=ScopeState.IN_SCOPE, label="bug-bounty"))
-        for ident in scope.out_of_scope:
-            if ident not in existing:
-                db.assets.create(Asset(project_id=project_id, identifier=ident,
-                                       asset_type=self._asset_type(scope.target_type),
-                                       scope=ScopeState.OUT_OF_SCOPE, label="bug-bounty"))
-        project = db.projects.get(project_id)
-        if project is not None:
-            project.scope_notes = self._scope_to_notes(scope)
-            db.projects.update(project)
-
-    @staticmethod
-    def _asset_type(t: TargetType) -> AssetType:
-        return {
-            TargetType.WEB: AssetType.WEB_APP,
-            TargetType.API: AssetType.URL,
-            TargetType.MOBILE_BACKEND: AssetType.URL,
-            TargetType.DESKTOP: AssetType.HOST,
-            TargetType.NETWORK: AssetType.NETWORK,
-        }.get(t, AssetType.OTHER)
-
-    @staticmethod
-    def _scope_to_notes(scope: Scope) -> str:
-        return (f"{_NOTES_HEADER}\nProgram: {scope.program}\nPlatform: {scope.platform}\n"
-                f"Target-Type: {scope.target_type.value}\n\n{scope.rules}").strip()
+        persist_scope(self._ctx.database, project_id, scope)
 
     def _load_scope_from_project(self, project_id: int) -> None:
         """Rebuild the in-memory scope from the project's assets + notes header."""
         db = self._ctx.database
-        assets = db.assets.list_for_project(project_id)
-        project = db.projects.get(project_id)
-        scope = Scope()
-        scope.in_scope = [a.identifier for a in assets if a.scope == ScopeState.IN_SCOPE]
-        scope.out_of_scope = [a.identifier for a in assets if a.scope == ScopeState.OUT_OF_SCOPE]
-        if project and project.scope_notes.startswith(_NOTES_HEADER):
-            for line in project.scope_notes.splitlines():
-                if line.startswith("Program:"):
-                    scope.program = line.split(":", 1)[1].strip()
-                elif line.startswith("Platform:"):
-                    scope.platform = line.split(":", 1)[1].strip()
-                elif line.startswith("Target-Type:"):
-                    val = line.split(":", 1)[1].strip()
-                    for t in TargetType:
-                        if t.value == val:
-                            scope.target_type = t
-            body = project.scope_notes.split("\n\n", 1)
-            scope.rules = body[1].strip() if len(body) > 1 else ""
+        scope = load_scope(db.projects.get(project_id), db.assets.list_for_project(project_id))
         self._scope = scope
         if scope.in_scope:
             self._program.setText(scope.program)

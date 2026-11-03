@@ -1,118 +1,167 @@
-"""Tests for the loopback web API: CSRF guard, validation, and plan lifecycle."""
+"""Tests for the loopback web API of the single assessment screen."""
 
 from __future__ import annotations
 
 import json
 import threading
+import time
 import urllib.error
 import urllib.request
 from collections.abc import Iterator
-from http.server import ThreadingHTTPServer
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
-from PySide6.QtCore import QCoreApplication
 
-from securityops.core.config import load_config
-from securityops.core.context import AppContext
-from securityops.core.database import Database
-from securityops.core.tasks import TaskManager
-from securityops.core.tools import ToolRegistry
-from securityops.web import WebState, _make_handler
+from securityops.assessment.analysis import LLMProvider, ProviderError
+from securityops.web import AssessmentSession, _make_handler
 
-# A documentation-range IP keeps the planner from doing DNS lookups.
-_TARGET = "192.0.2.10"
+
+class _Config(dict):
+    def get(self, key, default=None):  # noqa: ANN001, ANN202
+        return super().get(key, default)
+
+
+class _Site(BaseHTTPRequestHandler):
+    def do_GET(self) -> None:  # noqa: N802
+        body = b"<title>Lab</title>"
+        self.send_response(200)
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def log_message(self, *args: object) -> None:
+        pass
+
+
+class _Offline(LLMProvider):
+    name = "Offline model"
+
+    def complete(self, system: str, prompt: str) -> str:
+        raise ProviderError("Model is offline.")
 
 
 @pytest.fixture()
-def server(db: Database, all_installed_tools: ToolRegistry) -> Iterator[tuple[WebState, int]]:
-    QCoreApplication.instance() or QCoreApplication([])
-    context = AppContext(load_config(), db, TaskManager(), all_installed_tools)
-    state = WebState(context)
-    httpd = ThreadingHTTPServer(("127.0.0.1", 0), _make_handler(state))
-    thread = threading.Thread(target=httpd.serve_forever, daemon=True)
-    thread.start()
-    yield state, httpd.server_port
+def lab() -> Iterator[str]:
+    site = ThreadingHTTPServer(("127.0.0.1", 0), _Site)
+    threading.Thread(target=site.serve_forever, daemon=True).start()
+    yield f"http://127.0.0.1:{site.server_port}"
+    site.shutdown()
+    site.server_close()
+
+
+def _serve(config: dict) -> tuple[ThreadingHTTPServer, AssessmentSession]:
+    session = AssessmentSession(_Config({"assessment.timeout_seconds": 2, **config}),
+                                provider=_Offline())
+    httpd = ThreadingHTTPServer(("127.0.0.1", 0), _make_handler(session))
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    return httpd, session
+
+
+@pytest.fixture()
+def server() -> Iterator[tuple[AssessmentSession, int]]:
+    httpd, session = _serve({})
+    yield session, httpd.server_port
     httpd.shutdown()
     httpd.server_close()
-    thread.join(timeout=2)
 
 
 def _post(port: int, path: str, body: dict[str, object],
-          headers: dict[str, str] | None = None) -> tuple[int, dict[str, object]]:
+          headers: dict[str, str] | None = None) -> tuple[int, dict]:
     request = urllib.request.Request(
-        f"http://127.0.0.1:{port}{path}",
-        data=json.dumps(body).encode("utf-8"),
-        method="POST",
-        headers={"Content-Type": "application/json",
-                 "Origin": f"http://127.0.0.1:{port}",
-                 **(headers or {})},
-    )
+        f"http://127.0.0.1:{port}{path}", data=json.dumps(body).encode(), method="POST",
+        headers={"Content-Type": "application/json", "Origin": f"http://127.0.0.1:{port}",
+                 **(headers or {})})
     try:
-        with urllib.request.urlopen(request, timeout=5) as response:
+        with urllib.request.urlopen(request, timeout=10) as response:
             return response.status, json.loads(response.read())
     except urllib.error.HTTPError as exc:
         return exc.code, json.loads(exc.read())
 
 
-def _create_project(port: int, target: str = _TARGET) -> tuple[int, dict[str, object]]:
-    return _post(port, "/api/project",
-                 {"name": "Lab", "target": target, "authorized": True})
+def _get(port: int, path: str) -> tuple[int, dict[str, str], bytes]:
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}{path}", timeout=10) as response:
+            return response.status, dict(response.headers), response.read()
+    except urllib.error.HTTPError as exc:
+        return exc.code, dict(exc.headers), exc.read()
 
 
-def test_same_origin_json_post_creates_project(server: tuple[WebState, int]) -> None:
-    state, port = server
-    status, _ = _create_project(port)
-    assert status == 201
-    assert state.target == _TARGET
+def _wait(port: int, done: callable) -> dict:  # type: ignore[valid-type]
+    deadline = time.time() + 30
+    while time.time() < deadline:
+        state = json.loads(_get(port, "/api/status")[2])
+        if done(state):
+            return state
+        time.sleep(0.1)
+    raise AssertionError("timed out")
+
+
+def test_full_workflow_gather_analyze_report(server: tuple[AssessmentSession, int],
+                                             lab: str) -> None:
+    _session, port = server
+    assert _post(port, "/api/assess", {"target": lab, "authorized": True})[0] == 200
+    state = _wait(port, lambda s: s["status"] == "done")
+    assert all(step["status"] == "done" for step in state["steps"])
+    assert state["scan"]["http"]["http"]["status"] == 200
+
+    assert _post(port, "/api/analyze", {})[0] == 200
+    state = _wait(port, lambda s: s["analysis"] is not None)
+    assert state["analysis"]["source"] == "rules"           # model offline → fallback
+    assert "Model is offline" in state["analysis"]["error"]
+    assert state["analysis"]["findings"]
+
+    status, headers, body = _get(port, "/api/report?format=html")
+    assert status == 200
+    assert headers["Content-Disposition"].startswith("attachment")
+    assert "sandbox" in headers["Content-Security-Policy"]
+    assert b"Executive summary" in body and b"Limitations" in body
+
+
+def test_assessment_requires_authorization(server: tuple[AssessmentSession, int]) -> None:
+    session, port = server
+    status, body = _post(port, "/api/assess", {"target": "example.com", "authorized": False})
+    assert status == 400 and "authorized" in body["error"]
+    assert session.status == "idle"
+
+
+def test_invalid_target_gets_friendly_error(server: tuple[AssessmentSession, int]) -> None:
+    _session, port = server
+    status, body = _post(port, "/api/assess", {"target": "not a host", "authorized": True})
+    assert status == 400 and "domain" in body["error"]
+
+
+def test_configured_scope_is_enforced() -> None:
+    httpd, session = _serve({"assessment.allowed_targets": ["*.lab.test", "127.0.0.1"],
+                             "assessment.blocked_targets": ["admin.lab.test"]})
+    port = httpd.server_port
+    try:
+        status, body = _post(port, "/api/assess", {"target": "example.com", "authorized": True})
+        assert status == 400 and "allowed_targets" in body["error"]
+        status, body = _post(port, "/api/assess",
+                             {"target": "admin.lab.test", "authorized": True})
+        assert status == 400 and "blocked_targets" in body["error"]
+        assert session.status == "idle"
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+
+
+def test_report_and_analysis_need_a_scan_first(server: tuple[AssessmentSession, int]) -> None:
+    _session, port = server
+    assert _post(port, "/api/analyze", {})[0] == 409
+    assert _get(port, "/api/report?format=html")[0] == 400
 
 
 @pytest.mark.parametrize("headers", [
-    {"Content-Type": "text/plain"},                       # form / no-cors fetch
-    {"Origin": "https://evil.example"},                   # foreign page
-    {"Origin": "null"},                                   # sandboxed iframe / file://
-    {"Sec-Fetch-Site": "cross-site"},                     # fetch metadata
+    {"Content-Type": "text/plain"},
+    {"Origin": "https://evil.example"},
+    {"Origin": "null"},
+    {"Sec-Fetch-Site": "cross-site"},
 ])
-def test_cross_site_posts_are_rejected(server: tuple[WebState, int],
+def test_cross_site_posts_are_rejected(server: tuple[AssessmentSession, int],
                                        headers: dict[str, str]) -> None:
-    state, port = server
-    status, body = _post(port, "/api/project",
-                         {"name": "x", "target": _TARGET, "authorized": True}, headers)
-    assert status == 403
-    assert "Cross-site" in str(body["error"])
-    assert state.project_id is None
-
-
-def test_quoted_url_target_is_rejected(server: tuple[WebState, int]) -> None:
-    state, port = server
-    status, _ = _create_project(port, "http://example.test/a'b")
-    assert status == 400
-    assert state.project_id is None
-
-
-def test_plan_can_be_reset_and_project_closed(server: tuple[WebState, int]) -> None:
-    state, port = server
-    _create_project(port)
-    status, _ = _post(port, "/api/plan", {"goal": "Find open ports"})
-    assert status == 200
-    assert state.plan is not None and state.plan.steps
-
-    status, _ = _post(port, "/api/plan/reset", {})
-    assert status == 200
-    assert state.plan is None
-    assert state.project_id is not None
-
-    status, _ = _post(port, "/api/project/close", {})
-    assert status == 200
-    assert state.project_id is None
-    assert state.target == ""
-
-
-@pytest.mark.parametrize("path", ["/api/plan/reset", "/api/project/close"])
-def test_reset_and_close_refused_while_running(server: tuple[WebState, int], path: str) -> None:
-    state, port = server
-    _create_project(port)
-    _post(port, "/api/plan", {"goal": "Find open ports"})
-    state.running = True
-    status, _ = _post(port, path, {})
-    assert status == 400
-    assert state.plan is not None
+    session, port = server
+    status, body = _post(port, "/api/assess",
+                         {"target": "example.com", "authorized": True}, headers)
+    assert status == 403 and "Cross-site" in body["error"]
+    assert session.status == "idle"

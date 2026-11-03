@@ -1,9 +1,14 @@
 # Core runtime dependencies for SecurityOps Assistant
 # Install with:  python -m pip install -r requirements.txt
 
-PySide6>=6.6      # desktop GUI (Qt)
 PyYAML>=6.0       # configuration loading
 Jinja2>=3.1       # HTML report templating
+dnspython>=2.4    # DNS records (MX, NS, TXT, ...) for information gathering
+PySide6>=6.6      # optional desktop GUI (Qt); the main web UI does not need it
+
+# Optional: AI analysis through the Anthropic API (llm.provider: anthropic).
+# The default provider is a local Ollama model, which needs no Python package.
+# anthropic>=0.88
 
 # PDF report rendering (Linux/Kali). Optional: HTML and Markdown reports work
 # without it. security.txt lookup, disclosure emails, and the local LLM client

@@ -88,6 +88,15 @@ def parse_searchsploit(output: str) -> list[str]:
     return findings[:60]
 
 
+def parse_builtin(output: str) -> list[str]:
+    """Parser for the built-in checks (see ``securityops/checks.py``)."""
+    findings = parse_nmap(output)
+    findings += parse_web_paths("\n".join(
+        line for line in output.splitlines() if line.startswith("Status:")))
+    findings += [line[2:].strip() for line in output.splitlines() if line.startswith("+ ")]
+    return findings[:100]
+
+
 def parse_generic(output: str) -> list[str]:
     """Fallback parser: surface CVE mentions and obvious error lines."""
     findings: list[str] = []
@@ -112,6 +121,13 @@ _PARSERS: dict[str, Parser] = {
     "ffuf": parse_web_paths,
     "dirsearch": parse_web_paths,
     "searchsploit": parse_searchsploit,
+    "sops-dns": parse_builtin,
+    "sops-ports": parse_builtin,
+    "sops-http": parse_builtin,
+    "sops-headers": parse_builtin,
+    "sops-tls": parse_builtin,
+    "sops-paths": parse_builtin,
+    "sops-securitytxt": parse_builtin,
 }
 
 
