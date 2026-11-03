@@ -67,6 +67,7 @@ class MainWindow(QMainWindow):
         self._project_combo.currentIndexChanged.connect(self._on_project_selected)
 
         self._tabs = QTabWidget()
+        self._tabs.setObjectName("mainTabs")
         self._tabs.setDocumentMode(True)
         self._tabs.setMovable(True)
         self.setCentralWidget(self._tabs)
