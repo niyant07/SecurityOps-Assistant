@@ -165,3 +165,53 @@ def test_cross_site_posts_are_rejected(server: tuple[AssessmentSession, int],
                          {"target": "example.com", "authorized": True}, headers)
     assert status == 403 and "Cross-site" in body["error"]
     assert session.status == "idle"
+
+
+# --------------------------------------------------------------------------- #
+# Public (hosted) mode
+# --------------------------------------------------------------------------- #
+@pytest.fixture()
+def public_server() -> Iterator[tuple[AssessmentSession, int]]:
+    session = AssessmentSession(_Config({"assessment.timeout_seconds": 2}),
+                                provider=_Offline(), public=True)
+    httpd = ThreadingHTTPServer(("127.0.0.1", 0), _make_handler(session, "s3cret-code"))
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    yield session, httpd.server_port
+    httpd.shutdown()
+    httpd.server_close()
+
+
+def _public_post(port: int, body: dict, code: str | None) -> tuple[int, dict]:
+    headers = {"Origin": f"http://127.0.0.1:{port}"}
+    if code is not None:
+        headers["X-Access-Code"] = code
+    return _post(port, "/api/assess", body, headers)
+
+
+def test_public_mode_requires_access_code(public_server: tuple[AssessmentSession, int]) -> None:
+    session, port = public_server
+    assert _get(port, "/healthz")[0] == 200
+    assert _get(port, "/")[0] == 200                       # the UI itself loads
+    status, _h, body = _get(port, "/api/status")
+    assert status == 401 and json.loads(body)["code_required"]
+    for code in (None, "wrong"):
+        status, _ = _public_post(port, {"target": "example.com", "authorized": True}, code)
+        assert status == 401
+    assert session.status == "idle"
+
+
+def test_public_mode_blocks_internal_targets(public_server: tuple[AssessmentSession, int]) -> None:
+    session, port = public_server
+    for target in ("127.0.0.1", "localhost", "10.0.0.5", "169.254.169.254"):
+        status, body = _public_post(port, {"target": target, "authorized": True},
+                                    "s3cret-code")
+        assert status == 400 and "private or internal" in body["error"]
+    assert session.status == "idle"
+
+
+def test_public_mode_checks_origin_against_host(
+        public_server: tuple[AssessmentSession, int]) -> None:
+    _session, port = public_server
+    status, _ = _post(port, "/api/assess", {"target": "x", "authorized": True},
+                      {"Origin": "https://evil.example", "X-Access-Code": "s3cret-code"})
+    assert status == 403

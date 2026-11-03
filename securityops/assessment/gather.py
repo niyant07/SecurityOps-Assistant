@@ -125,6 +125,30 @@ def parse_target(text: str) -> Target:
     return Target(host=host, port=port, scheme=scheme)
 
 
+def is_public_host(host: str) -> bool:
+    """True if every address the host resolves to is a public internet address.
+
+    Used when the app is hosted online, so it cannot be pointed at the hosting
+    provider's internal network or cloud metadata service (SSRF protection).
+    """
+    try:
+        addresses = {info[4][0] for info in socket.getaddrinfo(host, None)}
+    except OSError:
+        return False
+    return bool(addresses) and all(
+        ipaddress.ip_address(a.split("%")[0]).is_global for a in addresses)
+
+
+class _PublicOnlyRedirect(urllib.request.HTTPRedirectHandler):
+    """Refuse redirects to private/internal addresses (hosted mode)."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):  # noqa: ANN001, ANN201
+        host = urlsplit(newurl).hostname or ""
+        if not is_public_host(host):
+            raise urllib.error.URLError(f"redirect to non-public address {host} blocked")
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
 # --------------------------------------------------------------------------- #
 # Individual checks (each returns plain data and never raises for network errors)
 # --------------------------------------------------------------------------- #
@@ -158,9 +182,12 @@ def gather_dns(host: str, timeout: float = DEFAULT_TIMEOUT) -> dict[str, list[st
     return records
 
 
-def fetch(url: str, timeout: float = DEFAULT_TIMEOUT, verify: bool = True) -> dict:
+def fetch(url: str, timeout: float = DEFAULT_TIMEOUT, verify: bool = True,
+          allow_private: bool = True) -> dict:
     """GET one URL and describe the response (follows redirects)."""
     handlers: list[urllib.request.BaseHandler] = []
+    if not allow_private:
+        handlers.append(_PublicOnlyRedirect())
     if not verify:
         context = ssl.create_default_context()
         context.check_hostname = False
@@ -189,7 +216,8 @@ def fetch(url: str, timeout: float = DEFAULT_TIMEOUT, verify: bool = True) -> di
         }
 
 
-def gather_http(target: Target, timeout: float = DEFAULT_TIMEOUT) -> tuple[dict[str, dict], list[str]]:
+def gather_http(target: Target, timeout: float = DEFAULT_TIMEOUT,
+                allow_private: bool = True) -> tuple[dict[str, dict], list[str]]:
     """Request the site over HTTP and HTTPS. Returns (results by scheme, errors)."""
     schemes = [target.scheme] if target.scheme else ["http", "https"]
     results: dict[str, dict] = {}
@@ -198,12 +226,13 @@ def gather_http(target: Target, timeout: float = DEFAULT_TIMEOUT) -> tuple[dict[
         port = f":{target.port}" if target.port else ""
         url = f"{scheme}://{target.host}{port}/"
         try:
-            results[scheme] = fetch(url, timeout)
+            results[scheme] = fetch(url, timeout, allow_private=allow_private)
         except urllib.error.URLError as exc:
             if isinstance(exc.reason, ssl.SSLError):
                 # Still collect headers; the TLS check reports the certificate problem.
                 try:
-                    results[scheme] = fetch(url, timeout, verify=False)
+                    results[scheme] = fetch(url, timeout, verify=False,
+                                            allow_private=allow_private)
                     results[scheme]["certificate_error"] = str(exc.reason)
                     continue
                 except (urllib.error.URLError, OSError) as retry_exc:
@@ -335,7 +364,7 @@ STEPS = ("DNS records", "HTTP/HTTPS response", "TLS certificate", "Security head
 
 
 def run_assessment(target_text: str, progress: Progress | None = None,
-                   timeout: float = DEFAULT_TIMEOUT) -> ScanResult:
+                   timeout: float = DEFAULT_TIMEOUT, allow_private: bool = True) -> ScanResult:
     """Run every information-gathering step against one target."""
     report = progress or (lambda _step, _status: None)
     target = parse_target(target_text)
@@ -349,7 +378,7 @@ def run_assessment(target_text: str, progress: Progress | None = None,
     report("DNS records", "done")
 
     report("HTTP/HTTPS response", "running")
-    result.http, http_errors = gather_http(target, timeout)
+    result.http, http_errors = gather_http(target, timeout, allow_private)
     result.errors.extend(http_errors)
     report("HTTP/HTTPS response", "done")
 

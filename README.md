@@ -70,6 +70,34 @@ PDF export uses WeasyPrint (`pip install weasyprint`; it also needs system libra
 on Windows/macOS). Without it, export the HTML report and use the browser's
 **Print → Save as PDF**.
 
+### Deploying online (Render)
+
+The repository includes a `Dockerfile` and a `render.yaml` Blueprint. The hosted
+copy runs in **public mode**:
+
+- every API call needs an **access code** (`SECURITYOPS_ACCESS_CODE`), so strangers
+  cannot use your server as a scanner;
+- it **only assesses public internet addresses**: private, loopback and cloud-internal
+  addresses (and redirects to them) are refused, so local lab targets need the local
+  app;
+- all visitors share one assessment at a time, so it suits a demo, not many users.
+
+Steps:
+
+1. Sign in at [render.com](https://render.com) with GitHub.
+2. **New → Blueprint**, pick `SecurityOps-Assistant` and the branch to deploy, and
+   click **Apply**.
+3. Open the new service → **Environment**: copy the generated
+   `SECURITYOPS_ACCESS_CODE`. Optionally set `ANTHROPIC_API_KEY` to enable AI analysis
+   (without it the hosted copy shows the rule-based analysis).
+4. Open the `https://securityops-assistant-….onrender.com` link and enter the access
+   code.
+
+The free plan sleeps when idle, so the first visit can take about a minute.
+
+To run the hosted version locally: `docker build -t securityops .` then
+`docker run -p 8765:8765 -e SECURITYOPS_ACCESS_CODE=<a long code> securityops`.
+
 ---
 
 ## Using the app

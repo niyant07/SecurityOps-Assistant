@@ -6,7 +6,14 @@ import threading
 from typing import Any
 
 from ..assessment.analysis import Analysis, LLMProvider, analyze, make_provider
-from ..assessment.gather import STEPS, ScanResult, TargetError, parse_target, run_assessment
+from ..assessment.gather import (
+    STEPS,
+    ScanResult,
+    TargetError,
+    is_public_host,
+    parse_target,
+    run_assessment,
+)
 from ..bugbounty.scope import Scope, ScopeValidator
 from ..core.logging_config import get_logger
 
@@ -21,8 +28,11 @@ class ScopeError(ValueError):
 class AssessmentSession:
     """One assessment at a time: gather in the background, then analyze on request."""
 
-    def __init__(self, config: Any, provider: LLMProvider | None = None) -> None:
+    def __init__(self, config: Any, provider: LLMProvider | None = None,
+                 public: bool = False) -> None:
         self.config = config
+        # Hosted online: never scan private, loopback or cloud-internal addresses.
+        self.public = public
         self.provider = provider or make_provider(config)
         self.lock = threading.Lock()
         self.status = "idle"          # idle | running | done | error
@@ -44,6 +54,10 @@ class AssessmentSession:
         if allowed and not ScopeValidator(Scope(in_scope=allowed)).is_in_scope(host):
             raise ScopeError(f"{host} is not in assessment.allowed_targets "
                              f"({', '.join(allowed)}).")
+        if self.public and not is_public_host(host):
+            raise ScopeError(f"{host} resolves to a private or internal address. The "
+                             "hosted version only assesses public websites; run the app "
+                             "locally to assess lab targets.")
 
     def start(self, target: str) -> None:
         """Validate and start information gathering in a background thread."""
@@ -68,7 +82,8 @@ class AssessmentSession:
     def _gather(self, target: str) -> None:
         timeout = float(self.config.get("assessment.timeout_seconds", 8))
         try:
-            scan = run_assessment(target, self._progress, timeout=timeout)
+            scan = run_assessment(target, self._progress, timeout=timeout,
+                                  allow_private=not self.public)
         except Exception as exc:  # noqa: BLE001 - report every failure to the UI
             _LOG.exception("Assessment of %s failed", target)
             with self.lock:
@@ -118,6 +133,7 @@ class AssessmentSession:
                 "analysis": self.analysis.to_dict() if self.analysis else None,
                 "error": self.error,
                 "provider": self.provider.name,
+                "public": self.public,
             }
 
 

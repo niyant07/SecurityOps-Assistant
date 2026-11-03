@@ -19,6 +19,7 @@ with a clear message, so the application always produces a result.
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from typing import Any
@@ -283,10 +284,15 @@ class AnthropicProvider(LLMProvider):
 
 
 def make_provider(config: Any) -> LLMProvider:
-    """Build the provider named in config (llm.provider: ollama | anthropic | none)."""
+    """Build the provider named in config (llm.provider: ollama | anthropic | none).
+
+    The SECURITYOPS_LLM_PROVIDER environment variable overrides the config file
+    (useful on a hosting service).
+    """
     if not config.get("llm.enabled", True):
         return LLMProvider()
-    provider = str(config.get("llm.provider", "ollama")).lower()
+    provider = (os.environ.get("SECURITYOPS_LLM_PROVIDER")
+                or str(config.get("llm.provider", "ollama"))).lower()
     if provider == "anthropic":
         return AnthropicProvider(str(config.get("llm.api_model", "claude-opus-5-5")))
     if provider == "ollama":

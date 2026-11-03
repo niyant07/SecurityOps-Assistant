@@ -15,7 +15,7 @@ import {
   Shield,
   X,
 } from "lucide-react";
-import { download, request } from "./api.js";
+import { AccessCodeRequired, download, request, setAccessCode } from "./api.js";
 
 function Spinner({ size = 15 }) {
   return <LoaderCircle className="spin" size={size} />;
@@ -47,13 +47,17 @@ function App() {
   const [busy, setBusy] = useState("");
   const [notice, setNotice] = useState(null);
   const [offline, setOffline] = useState(false);
+  const [needsCode, setNeedsCode] = useState(false);
+  const [code, setCode] = useState("");
 
   const refresh = useCallback(async () => {
     try {
       setState(await request("/api/status"));
       setOffline(false);
-    } catch {
-      setOffline(true);
+      setNeedsCode(false);
+    } catch (error) {
+      if (error instanceof AccessCodeRequired) setNeedsCode(true);
+      else setOffline(true);
     }
   }, []);
 
@@ -85,6 +89,21 @@ function App() {
   });
   const exportReport = (format) => act(format, () => download(`/api/report?format=${format}`));
 
+  if (needsCode) {
+    return (
+      <div className="single">
+        <header className="app-header"><div className="brand"><span className="brand-mark"><Shield size={20} strokeWidth={2.2} /></span><span className="brand-copy"><strong>security<span>ops</span></strong><small>WEBSITE SECURITY ASSESSMENT</small></span></div></header>
+        <Card title="Access code" icon={LockKeyhole}>
+          <p className="muted">This hosted copy is private. Enter the access code from the owner.</p>
+          <form className="target-form" onSubmit={(event) => { event.preventDefault(); setAccessCode(code.trim()); setCode(""); refresh(); }}>
+            <input type="password" value={code} onChange={(e) => setCode(e.target.value)} aria-label="Access code" placeholder="Access code" autoFocus required />
+            <button className="btn primary">Unlock</button>
+          </form>
+        </Card>
+      </div>
+    );
+  }
+
   const running = state?.status === "running";
   const scan = state?.scan;
   const analysis = state?.analysis;
@@ -95,7 +114,7 @@ function App() {
         <div className="brand"><span className="brand-mark"><Shield size={20} strokeWidth={2.2} /></span><span className="brand-copy"><strong>security<span>ops</span></strong><small>WEBSITE SECURITY ASSESSMENT</small></span></div>
         <div className="header-pills">
           <span className="pill"><Bot size={12} /> AI: {state?.provider ?? "…"}</span>
-          <span className="pill green"><LockKeyhole size={11} /> Runs locally</span>
+          <span className="pill green"><LockKeyhole size={11} /> {state?.public ? "Private hosted copy" : "Runs locally"}</span>
         </div>
       </header>
 
@@ -103,7 +122,7 @@ function App() {
 
       <Card title="1. Information gathering" icon={Globe2} actions={scan && !running && <button className="btn ghost" onClick={reset} disabled={busy === "reset" || state?.analyzing}><RotateCcw size={14} />New assessment</button>}>
         <form className="target-form" onSubmit={start}>
-          <input value={target} onChange={(e) => setTarget(e.target.value)} maxLength={300} placeholder="example.com, https://example.com or 127.0.0.1:8080" aria-label="Target domain" disabled={running} required />
+          <input value={target} onChange={(e) => setTarget(e.target.value)} maxLength={300} placeholder={state?.public ? "example.com or https://example.com" : "example.com, https://example.com or 127.0.0.1:8080"} aria-label="Target domain" disabled={running} required />
           <button className="btn primary" disabled={!authorized || !target.trim() || running || busy === "start"}>{running || busy === "start" ? <Spinner /> : <Play size={15} fill="currentColor" />}Start Assessment</button>
         </form>
         <label className="consent"><input type="checkbox" checked={authorized} onChange={(e) => setAuthorized(e.target.checked)} disabled={running} /><span>I own this target or have explicit permission to assess it. Only non-destructive checks are performed.</span></label>
@@ -134,7 +153,7 @@ function App() {
           <div className="row">
             <button className="btn primary" onClick={() => exportReport("html")} disabled={busy === "html"}>{busy === "html" ? <Spinner /> : <Download size={15} />}Export HTML Report</button>
             <button className="btn" onClick={() => exportReport("pdf")} disabled={busy === "pdf"}>{busy === "pdf" ? <Spinner /> : <Download size={15} />}Export PDF</button>
-            <a className="btn ghost" href="/api/report?format=html&inline=1" target="_blank" rel="noreferrer"><Eye size={15} />Preview</a>
+            {!state.public && <a className="btn ghost" href="/api/report?format=html&inline=1" target="_blank" rel="noreferrer"><Eye size={15} />Preview</a>}
           </div>
         </Card>
       )}
