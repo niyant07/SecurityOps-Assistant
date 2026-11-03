@@ -98,9 +98,16 @@ class WorkflowEngine(QObject):
         step.status = StepStatus.RUNNING
         step.started_at = datetime.now(timezone.utc)  # noqa: UP017
         self._buffer = []
-        argv = self._ctx.tools.split_command(step.command)
+        try:
+            argv = self._ctx.tools.split_command(step.command)
+        except ValueError as exc:
+            argv, error = [], f"Malformed command ({exc})"
+        else:
+            error = "Empty command"
         if not argv:
-            self._fail_step(index, step, "Empty command")
+            self._fail_step(index, step, error)
+            self.step_finished.emit(index)
+            self._advance()
             return
 
         self._persist(index, step)

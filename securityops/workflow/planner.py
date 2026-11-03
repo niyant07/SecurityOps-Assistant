@@ -116,7 +116,9 @@ _GENERIC = re.compile(r"\b(assess|audit|check|test|analyz|review|look at|securit
 # --------------------------------------------------------------------------- #
 # Target extraction
 # --------------------------------------------------------------------------- #
-_URL_RE = re.compile(r"https?://[^\s]+", re.I)
+# Quotes, backslashes and angle brackets are excluded: they would break (or
+# alter) shell-style splitting of the command built from the target.
+_URL_RE = re.compile(r"https?://[^\s'\"\\<>`]+", re.I)
 _IP_RE = re.compile(r"\b\d{1,3}(?:\.\d{1,3}){3}(?:/\d{1,2})?\b")
 _HOST_RE = re.compile(r"\b(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}\b", re.I)
 

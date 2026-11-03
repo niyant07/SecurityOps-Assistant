@@ -177,6 +177,25 @@ def _make_handler(state: WebState) -> type[BaseHTTPRequestHandler]:
             }
             return address.is_loopback and self.headers.get("Host", "").lower() in allowed_hosts
 
+        def _is_same_origin_post(self) -> bool:
+            """Reject cross-site POSTs (CSRF) from pages open in the user's browser.
+
+            Requiring ``application/json`` forces a CORS preflight that this server
+            never answers, and any Origin / Sec-Fetch-Site the browser sends must
+            identify this server itself.
+            """
+            content_type = self.headers.get("Content-Type", "").split(";")[0].strip().lower()
+            if content_type != "application/json":
+                return False
+            fetch_site = self.headers.get("Sec-Fetch-Site", "").lower()
+            if fetch_site and fetch_site not in {"same-origin", "none"}:
+                return False
+            origin = self.headers.get("Origin")
+            if origin is None:
+                return True
+            port = self.server.server_port
+            return origin.lower() in {f"http://127.0.0.1:{port}", f"http://localhost:{port}"}
+
         def _json(self, status: HTTPStatus, value: object) -> None:
             body = json.dumps(value, ensure_ascii=False).encode("utf-8")
             self.send_response(status)
@@ -234,12 +253,19 @@ def _make_handler(state: WebState) -> type[BaseHTTPRequestHandler]:
             if not self._is_local_request():
                 self._json(HTTPStatus.FORBIDDEN, {"error": "Loopback requests only."})
                 return
+            if not self._is_same_origin_post():
+                self._json(HTTPStatus.FORBIDDEN, {"error": "Cross-site requests are not allowed."})
+                return
             try:
                 data = self._body()
                 if self.path == "/api/project":
                     self._create_project(data)
+                elif self.path == "/api/project/close":
+                    self._close_project()
                 elif self.path == "/api/plan":
                     self._create_plan(data)
+                elif self.path == "/api/plan/reset":
+                    self._reset_plan()
                 elif self.path == "/api/run":
                     self._run_steps(data)
                 elif self.path == "/api/cancel":
@@ -282,6 +308,24 @@ def _make_handler(state: WebState) -> type[BaseHTTPRequestHandler]:
                 state.target = target.strip()
                 state.plan = None
             self._json(HTTPStatus.CREATED, {"ok": True})
+
+        def _close_project(self) -> None:
+            with state.lock:
+                if state.running:
+                    raise ValueError("Wait for the current workflow to finish first.")
+                state.project_id = None
+                state.target = ""
+                state.plan = None
+                state.log.clear()
+            self._json(HTTPStatus.OK, {"ok": True})
+
+        def _reset_plan(self) -> None:
+            with state.lock:
+                if state.running:
+                    raise ValueError("Wait for the current workflow to finish first.")
+                state.plan = None
+                state.log.clear()
+            self._json(HTTPStatus.OK, {"ok": True})
 
         def _create_plan(self, data: dict[str, Any]) -> None:
             goal = data.get("goal")

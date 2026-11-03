@@ -11,7 +11,7 @@ from securityops.core.tasks import TaskManager
 from securityops.core.tools import ToolRegistry
 from securityops.models import Project, ScanStatus
 from securityops.workflow.engine import WorkflowEngine
-from securityops.workflow.plan import StepStatus, WorkflowStep
+from securityops.workflow.plan import StepStatus, WorkflowPlan, WorkflowStep
 
 
 def test_running_scan_record_is_updated_when_step_finishes(db: Database) -> None:
@@ -47,3 +47,27 @@ def test_running_scan_record_is_updated_when_step_finishes(db: Database) -> None
     assert completed_records[0].status is ScanStatus.COMPLETED
     assert completed_records[0].output == "22/tcp open ssh"
     assert completed_records[0].exit_code == 0
+
+
+def test_malformed_command_fails_step_and_finishes_plan(db: Database) -> None:
+    project = db.projects.create(Project(name="Malformed command"))
+    assert project.id is not None
+    context = AppContext(load_config(), db, TaskManager(), ToolRegistry())
+    engine = WorkflowEngine(context)
+    finished: list[bool] = []
+    engine.plan_finished.connect(lambda: finished.append(True))
+    step = WorkflowStep(
+        tool_key="whatweb",
+        title="WhatWeb",
+        rationale="Unbalanced quote cannot be split into argv.",
+        command="whatweb http://example.test/a'b",
+        target="http://example.test/a'b",
+        status=StepStatus.APPROVED,
+    )
+
+    engine.run(WorkflowPlan(goal="test", summary="", steps=[step]), project.id)
+
+    assert step.status is StepStatus.FAILED
+    assert "Malformed command" in step.output
+    assert finished == [True]
+    assert db.scans.list_for_project(project.id)[0].status is ScanStatus.FAILED

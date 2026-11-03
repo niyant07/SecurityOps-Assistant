@@ -10,7 +10,13 @@ export default defineConfig({
   server: {
     host: "127.0.0.1",
     proxy: {
-      "/api": "http://127.0.0.1:8765",
+      // The backend rejects POSTs whose Origin is not itself (CSRF guard), so
+      // present the dev server's requests as coming from the backend origin.
+      "/api": {
+        target: "http://127.0.0.1:8765",
+        changeOrigin: true,
+        headers: { origin: "http://127.0.0.1:8765" },
+      },
     },
   },
   build: {

@@ -132,6 +132,8 @@ button:disabled { opacity: .48; cursor: not-allowed !important; }
 .plan-summary p { margin: 4px 0 0; color: #8da49a; font-size: 10px; line-height: 1.5; }
 .text-button { margin-left: auto; padding: 5px 7px; border: 1px solid #294139; border-radius: 5px; color: #89c6a9; background: #162822; font-size: 9px; cursor: pointer; white-space: nowrap; }
 .text-button:hover { border-color: #4a755f; }
+.text-button:disabled { opacity: .5; cursor: not-allowed; }
+.active-project .text-button { margin-left: 0; }
 .step-list { display: grid; gap: 9px; margin-top: 11px; }
 .workflow-step { padding: 12px; border: 1px solid #222f3f; border-radius: 8px; background: #0d141e; transition: border-color .2s, background .2s; animation: rise-in .28s ease both; }
 .workflow-step:hover { border-color: #33475e; background: #0f1722; }

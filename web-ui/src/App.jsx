@@ -138,6 +138,35 @@ function App() {
     }
   }
 
+  async function handleResetPlan() {
+    setBusy("reset");
+    try {
+      await request("/api/plan/reset", {});
+      setGoal("");
+      setSelectedSteps([]);
+      await refresh();
+    } catch (error) {
+      showNotice(error.message, "error");
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function handleCloseProject() {
+    setBusy("close");
+    try {
+      await request("/api/project/close", {});
+      setGoal("");
+      setSelectedSteps([]);
+      await refresh();
+      showNotice("Engagement closed. Its history stays in the local database.", "info");
+    } catch (error) {
+      showNotice(error.message, "error");
+    } finally {
+      setBusy("");
+    }
+  }
+
   async function handleCancel() {
     setBusy("cancel");
     try {
@@ -221,6 +250,7 @@ function App() {
               <div className="project-target-icon"><Globe2 size={19} /></div>
               <div className="project-details"><strong>{project.name}</strong><span>{project.target}</span></div>
               <div className="project-state"><span className="online-dot" />Scope verified</div>
+              <button className="text-button" onClick={handleCloseProject} disabled={state?.running || busy === "close"}>Change engagement</button>
               <div className="project-shield"><ShieldCheck size={19} /></div>
             </div>
           ) : (
@@ -254,7 +284,7 @@ function App() {
                   <div className="refusal"><Shield size={19} /><div><strong>Request not accepted</strong><p>{plan.refusal_reason}</p></div></div>
                 ) : (
                   <>
-                    <div className="plan-summary"><div className="summary-icon"><CheckCircle2 size={17} /></div><div><strong>Plan ready for your review</strong><p>{plan.summary}</p></div><button className="text-button" onClick={() => { setGoal(""); setSelectedSteps([]); setState((current) => current ? { ...current, plan: null } : current); }}>New plan</button></div>
+                    <div className="plan-summary"><div className="summary-icon"><CheckCircle2 size={17} /></div><div><strong>Plan ready for your review</strong><p>{plan.summary}</p></div><button className="text-button" onClick={handleResetPlan} disabled={state?.running || busy === "reset"}>New plan</button></div>
                     <div className="step-list">
                       {plan.steps.map((step) => (
                         <article className={`workflow-step ${step.status.toLowerCase()}`} key={step.index}>
